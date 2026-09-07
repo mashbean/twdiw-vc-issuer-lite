@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "twdiw-vc-issuer-lite",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-03",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": false,
+    "logs": { "enabled": false, "invocation_logs": false, "persist": false },
+    "traces": { "enabled": false, "persist": false }
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "IDENTITY", "class_name": "IssuerIdentity" },
+      { "name": "ISSUANCES", "class_name": "IssuanceSession" },
+      { "name": "SESSIONS", "class_name": "PresentationSession" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["IssuerIdentity", "IssuanceSession", "PresentationSession"] }
+  ],
+  "vars": {
+    "OFFICIAL_TRUST_REGISTRY_URL": "https://frontend.wallet.gov.tw/api/did",
+    "ISSUER_ORIGIN": ""
+  }
+}

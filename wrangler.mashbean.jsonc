@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // The maintained demo deployment. Keep this Worker name: renaming it would
+  // provision new Durable Object namespaces and therefore a new issuer did:key,
+  // and every wallet that pinned the old DID would stop trusting the cards.
+  "name": "mashbean-vc-issuer",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-03",
+  "compatibility_flags": ["nodejs_compat"],
+  "account_id": "fd8f8ed12dcdfd03ad171a3a74bc712a",
+  "routes": [{ "pattern": "issuer.mashbean.net", "custom_domain": true }],
+  "observability": {
+    "enabled": false,
+    "logs": { "enabled": false, "invocation_logs": false, "persist": false },
+    "traces": { "enabled": false, "persist": false }
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "IDENTITY", "class_name": "IssuerIdentity" },
+      { "name": "ISSUANCES", "class_name": "IssuanceSession" },
+      { "name": "SESSIONS", "class_name": "PresentationSession" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["IssuerIdentity", "IssuanceSession", "PresentationSession"] }
+  ],
+  "vars": {
+    "OFFICIAL_TRUST_REGISTRY_URL": "https://frontend.wallet.gov.tw/api/did",
+    "ISSUER_ORIGIN": "https://issuer.mashbean.net"
+  }
+}
