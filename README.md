@@ -26,6 +26,12 @@
 
 皮夾以信任清單上的主機名稱決定要不要跟發卡端講話，再以清單上的 DID 決定要不要收下卡。要讓任何皮夾收下自己部署的卡，都要先把新站的 `did:key`（`GET /api/issuer`）與主機名稱釘進那個皮夾的信任例外。這是皮夾營運者擁有的決定；本專案不提供任何繞過官方清單的方法。
 
+示範站的 did:key（2026-09-08，`jwk_jcs-pub` 拼法，公鑰內嵌；有備而來以 `TWDIWIssuer.mashbeanSandbox` 釘住同一字串）：
+
+```text
+did:key:z2dmzD81cgPx8Vki7JbuuMmFYrWPgYoytykUZ3eyqht1j9Kbo2Mi4LUgEfFf1SyPGTHyP82LZ2VH9F6RGYsDNMtC2cmEJqADsXXbhTn4USsdTCP6h1ePhtazrv4rczSJUEKxyU1zRSHe5h4fjVg8VQRygF8YafgjNXEDzB6bquD9DUf45A
+```
+
 ## 直接部署
 
 1. 按 README 上方的 **Deploy to Cloudflare**。
