@@ -160,12 +160,13 @@ export function statusListTargets(selfOrigin: string): Array<{ id: string; label
 }
 
 export const WATCHED_REPOS: Array<{ id: string; owner: string; repo: string; label: string; tier: Tier }> = [
-  // The official ones first: the wallet app people install, and the DID work
-  // the trust list rests on. `moda-gov-tw/TW-DIW` is deliberately absent — it
-  // is a private repository, so a public monitor can only ever report 404 on
-  // it, and watching what it cannot see would be theatre.
+  // One official repository, because there is only one worth watching in
+  // public. `moda-gov-tw/TW-DIW` is private, so a public monitor can only ever
+  // report 404 on it. `moda-gov-tw/tw-did` is readable but belongs to a
+  // different piece of work — it is not part of the wallet — and a panel that
+  // lists it invites the reader to draw conclusions about the wallet from
+  // commits that have nothing to do with it.
   { id: "repo-official-app", owner: "moda-gov-tw", repo: "TWDIW-official-app", label: "官方皮夾 App", tier: "official" },
-  { id: "repo-tw-did", owner: "moda-gov-tw", repo: "tw-did", label: "官方 tw-did", tier: "official" },
   { id: "repo-verifier", owner: "mashbean", repo: "twdiw-vp-verifier-lite", label: "請出示皮夾", tier: "own" },
   { id: "repo-issuer", owner: "mashbean", repo: "twdiw-vc-issuer-lite", label: "請收下卡片", tier: "own" },
   { id: "repo-wallet", owner: "bonds-tw", repo: "Bonds-iOS", label: "有備而來 皮夾", tier: "own" },

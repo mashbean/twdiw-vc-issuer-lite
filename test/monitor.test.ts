@@ -62,10 +62,12 @@ describe("what the monitor watches", () => {
     expect(lists).toHaveLength(1);
     expect(lists[0]?.url).toBe(`${ORIGIN}/status/1`);
     expect(lists[0]?.tier).toBe("own");
-    expect(WATCHED_REPOS.filter((repo) => repo.owner === "moda-gov-tw").length).toBeGreaterThanOrEqual(2);
-    // A private repository can only ever 404 for a public monitor.
-    expect(WATCHED_REPOS.some((repo) => repo.repo === "TW-DIW")).toBe(false);
-    expect(WATCHED_REPOS.map((repo) => repo.repo)).toContain("TWDIW-official-app");
+    // The official panel watches the wallet app and nothing else: `TW-DIW` is
+    // private and can only ever 404 for a public monitor, and `tw-did` is a
+    // separate line of work whose commits say nothing about the wallet.
+    expect(WATCHED_REPOS.filter((repo) => repo.tier === "official").map((repo) => repo.repo))
+      .toEqual(["TWDIW-official-app"]);
+    expect(WATCHED_REPOS.some((repo) => repo.repo === "TW-DIW" || repo.repo === "tw-did")).toBe(false);
   });
 });
 

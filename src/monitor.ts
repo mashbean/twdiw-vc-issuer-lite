@@ -313,6 +313,8 @@ export class MonitorState extends DurableObject<Env> {
       // The identity object being briefly unavailable is not a monitor failure.
     }
 
+    this.retire(this.plannedTargets(origin));
+
     // Record every check, and raise an event only where the state changed.
     for (const check of results) {
       const before = this.previousOk(check.target);
@@ -476,6 +478,34 @@ export class MonitorState extends DurableObject<Env> {
       rpcEndpoint: scan.rpcEndpoint ? safeHost(scan.rpcEndpoint) : undefined,
       rpcTrail: scan.rpcTrail,
     });
+  }
+
+  /** Every target this scan answers for, whether or not it produced a result
+   *  this time. Anything outside it has been retired from the configuration. */
+  private plannedTargets(origin: string): Set<string> {
+    return new Set([
+      ...endpointTargets(origin).map((target) => target.id),
+      ...statusListTargets(origin).map((target) => target.id),
+      ...WATCHED_REPOS.map((entry) => entry.id),
+      // Produced only when their prerequisites hold — a trust list that would
+      // not load takes the census and the chain comparison with it — so they
+      // are named here rather than inferred from one run's results, which would
+      // throw away sixty days of history over a single outage.
+      "issuance-e2e", "status-census", "arbitrum-rpc", "official-trust-list", "probe-error",
+    ]);
+  }
+
+  /** Forgets targets that are no longer watched. Without this the last thing a
+   *  retired target ever said stays on the page forever: a repository dropped
+   *  from the watch list went on reporting "unreadable" long after anyone
+   *  stopped asking about it, and the panel counted it. */
+  private retire(planned: Set<string>): void {
+    const sql = this.sql();
+    for (const row of sql.exec("SELECT DISTINCT target FROM checks").toArray()) {
+      const target = String(row.target);
+      if (planned.has(target)) continue;
+      sql.exec("DELETE FROM checks WHERE target = ?", target);
+    }
   }
 
   private prune(now: number): void {
