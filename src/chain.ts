@@ -346,7 +346,10 @@ async function callRPC(
         trail?.push(`${host} 成功`);
         return { json, endpoint };
       } catch (error) {
-        lastError = `${host}：${error instanceof Error ? error.message : "失敗"}`;
+        // Never let the endpoint itself into the message. A configured endpoint
+        // carries an API key, and `new URL()` and fetch both quote their input
+        // back in the error text — which would publish the key on the page.
+        lastError = describeFailure(endpoint, host, error);
         trail?.push(lastError);
       }
     }
@@ -360,8 +363,23 @@ function hostOf(endpoint: string): string {
   try {
     return new URL(endpoint).hostname;
   } catch {
-    return "（無法解析的端點）";
+    return "（設定的端點不是合法網址）";
   }
+}
+
+/** A failure description with the endpoint scrubbed out of it. */
+function describeFailure(endpoint: string, host: string, error: unknown): string {
+  let parsed = false;
+  try {
+    new URL(endpoint);
+    parsed = true;
+  } catch {
+    // An endpoint that will not parse is a configuration mistake, and its raw
+    // value is exactly the thing that must not be echoed.
+  }
+  if (!parsed) return "設定的 RPC 端點不是合法網址，請填完整的 https:// 端點（含路徑）";
+  const raw = error instanceof Error ? error.message : "失敗";
+  return `${host}：${raw.split(endpoint).join("（端點已隱藏）")}`;
 }
 
 export async function scanChain(

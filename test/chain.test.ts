@@ -246,6 +246,23 @@ describe("scanning the whole registry", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it("never echoes a configured endpoint, which may carry an API key", async () => {
+    const secret = "https://arbitrum-mainnet.infura.io/v3/SUPERSECRETKEY";
+    const fetcher = vi.fn(async () => { throw new Error(`request to ${secret} failed`); }) as unknown as typeof fetch;
+    const scan = await scanChain([REGISTRATION], { fetcher, retryScale: 0, rpcURLs: [secret] });
+    const printed = JSON.stringify(scan.rpcTrail) + (scan.rpcError ?? "");
+    expect(printed).not.toContain("SUPERSECRETKEY");
+    expect(printed).toContain("arbitrum-mainnet.infura.io");
+  });
+
+  it("says so plainly when the configured endpoint is not a URL at all", async () => {
+    const fetcher = vi.fn(async () => { throw new Error("Invalid URL: 211f74d324f94296bec2c45cacea6ff2"); }) as unknown as typeof fetch;
+    const scan = await scanChain([REGISTRATION], { fetcher, retryScale: 0, rpcURLs: ["211f74d324f94296bec2c45cacea6ff2"] });
+    const printed = JSON.stringify(scan.rpcTrail) + (scan.rpcError ?? "");
+    expect(printed).not.toContain("211f74d324f94296bec2c45cacea6ff2");
+    expect(printed).toContain("不是合法網址");
+  });
+
   it("reports unavailable, never verified, when the RPC cannot be reached", async () => {
     const fetcher = vi.fn(async () => { throw new Error("boom"); }) as unknown as typeof fetch;
     const scan = await scanChain([REGISTRATION], { fetcher, retryScale: 0 });
