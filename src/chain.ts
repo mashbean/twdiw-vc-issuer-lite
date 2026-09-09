@@ -272,15 +272,22 @@ export interface ChainScan {
 const RANK: Record<ChainVerdict, number> = { mismatch: 3, unavailable: 2, verified: 1, notAnchored: 0 };
 /** DIDs per JSON-RPC batch. Each one costs three calls, and a public endpoint
  *  is happier with several modest batches than one enormous array. */
-/** DIDs per JSON-RPC batch. Larger batches mean fewer HTTP requests, and the
- *  rate limiter counts requests: the official endpoint happily answers a
- *  36-call array, so four fat batches beat seven thin ones. */
-const DIDS_PER_BATCH = 12;
+/** DIDs per JSON-RPC batch, each costing three calls.
+ *
+ *  The rate limiter counts requests, not calls, and the official endpoint
+ *  answered a 129-call array without complaint (measured 2026-09-09), so the
+ *  whole registry fits in one or two requests. Going the other way — many small
+ *  batches — is what got this monitor rate-limited into a half-empty result on
+ *  its first two production runs. Forty keeps a batch at 120 calls, comfortably
+ *  inside what was measured, with room for the registry to grow. */
+const DIDS_PER_BATCH = 40;
 /** A pause between batches. This runs once a day, so spending a few seconds
  *  being a polite client costs nothing and avoids the rate limiter. */
-const BATCH_PAUSE_MS = 800;
-/** Waits before re-trying the same endpoint, in order. */
-const BACKOFF_MS = [0, 1_000, 3_000];
+const BATCH_PAUSE_MS = 1_500;
+/** Waits before re-trying the same endpoint, in order. Generous because a daily
+ *  job has all the time in the world and the alternative — falling back to a
+ *  provider that cannot serve archive queries — is worse than waiting. */
+const BACKOFF_MS = [0, 2_000, 8_000];
 
 const sleep = (ms: number) => (ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve());
 
