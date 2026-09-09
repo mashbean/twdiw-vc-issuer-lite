@@ -44,16 +44,22 @@ export const MONITOR_HTML = /* html */ `<!doctype html>
       <p id="refresh-note" class="refresh-note"></p>
     </section>
 
-    <section class="status-strip" aria-label="各面向狀態">
-      <div class="status-cell" id="cell-api"><span class="dot" aria-hidden="true"></span><strong>API 健康度</strong><small>載入中…</small></div>
-      <div class="status-cell" id="cell-e2e"><span class="dot" aria-hidden="true"></span><strong>發卡自檢</strong><small>載入中…</small></div>
-      <div class="status-cell" id="cell-trust"><span class="dot" aria-hidden="true"></span><strong>信任清單</strong><small>載入中…</small></div>
-      <div class="status-cell" id="cell-status"><span class="dot" aria-hidden="true"></span><strong>撤銷清單</strong><small>載入中…</small></div>
-      <div class="status-cell" id="cell-chain"><span class="dot" aria-hidden="true"></span><strong>區塊鏈</strong><small>載入中…</small></div>
-      <div class="status-cell" id="cell-repo"><span class="dot" aria-hidden="true"></span><strong>原始碼</strong><small>載入中…</small></div>
-    </section>
-
     <p id="load-error" class="error" role="alert"></p>
+
+    <section class="official-block" aria-labelledby="official-title">
+      <div class="block-heading">
+        <p class="eyebrow">OFFICIAL ECOSYSTEM</p>
+        <h2 id="official-title">官方生態系</h2>
+        <p>數位發展部與各發卡機關經營的部分。這是這個儀表板的主體。</p>
+      </div>
+
+      <div class="status-strip" aria-label="官方各面向狀態">
+        <div class="status-cell" id="cell-api"><span class="dot" aria-hidden="true"></span><strong>官方 API</strong><small>載入中…</small></div>
+        <div class="status-cell" id="cell-status"><span class="dot" aria-hidden="true"></span><strong>撤銷清單</strong><small>載入中…</small></div>
+        <div class="status-cell" id="cell-trust"><span class="dot" aria-hidden="true"></span><strong>信任清單</strong><small>載入中…</small></div>
+        <div class="status-cell" id="cell-chain"><span class="dot" aria-hidden="true"></span><strong>區塊鏈</strong><small>載入中…</small></div>
+        <div class="status-cell" id="cell-repo"><span class="dot" aria-hidden="true"></span><strong>官方原始碼</strong><small>載入中…</small></div>
+      </div>
 
     <details class="panel" id="panel-api" open>
       <summary>API 健康度</summary>
@@ -62,12 +68,6 @@ export const MONITOR_HTML = /* html */ `<!doctype html>
         <thead><tr><th>服務</th><th>營運者</th><th>狀態</th><th>延遲</th><th>近況</th><th>說明</th></tr></thead>
         <tbody><tr><td colspan="6" class="loading">載入中…</td></tr></tbody>
       </table></div>
-    </details>
-
-    <details class="panel" id="panel-e2e" open>
-      <summary>發卡端到端自檢</summary>
-      <p class="panel-note">每天由 Worker 自己扮演一次皮夾：建立 offer、取回 offer 物件、讀 metadata、換 token、以 <code>openid4vci-proof+jwt</code> 領卡，再依查驗端的規則驗證這張卡。單點 ping 看不出發卡是否還能成功，這條可以。</p>
-      <div id="e2e-body" class="e2e-body"><p class="loading">載入中…</p></div>
     </details>
 
     <details class="panel" id="panel-trust">
@@ -92,11 +92,7 @@ export const MONITOR_HTML = /* html */ `<!doctype html>
         <tbody><tr><td colspan="5" class="loading">載入中…</td></tr></tbody>
       </table></div>
       <p id="census-meta" class="trust-meta"></p>
-      <h3>本站自己的清單</h3>
-      <div class="table-wrap"><table class="monitor-table" id="table-status">
-        <thead><tr><th>清單</th><th>營運者</th><th>格式</th><th>位元總數</th><th>已撤銷</th><th>簽章金鑰在 DID 內</th><th>說明</th></tr></thead>
-        <tbody><tr><td colspan="7" class="loading">載入中…</td></tr></tbody>
-      </table></div>
+
     </details>
 
     <details class="panel" id="panel-chain">
@@ -106,13 +102,55 @@ export const MONITOR_HTML = /* html */ `<!doctype html>
     </details>
 
     <details class="panel" id="panel-repo">
-      <summary>原始碼 Repo</summary>
-      <p class="panel-note">這是活躍度，不是健康度：它說的是程式碼最後一次動是什麼時候，不是它能不能用。</p>
+      <summary>官方原始碼 Repo</summary>
+      <p class="panel-note">數位發展部公開的相關 repo。這是活躍度，不是健康度：它說的是程式碼最後一次動是什麼時候，不是它能不能用。</p>
       <div class="table-wrap"><table class="monitor-table" id="table-repo">
         <thead><tr><th>專案</th><th>最後更新</th><th>開放 issue</th><th>星數</th><th>授權</th><th>狀態</th></tr></thead>
         <tbody><tr><td colspan="6" class="loading">載入中…</td></tr></tbody>
       </table></div>
     </details>
+    </section>
+
+    <section class="own-block" aria-labelledby="own-title">
+      <div class="block-heading">
+        <p class="eyebrow">THIS PROJECT</p>
+        <h2 id="own-title">本專案（有備而來與 mashbean）</h2>
+        <p>與官方無關，由 mashbean 獨立維護的服務與程式碼。放在這裡只是為了自我課責——同一套標準也用來檢查自己——不是這個儀表板要看的重點。</p>
+      </div>
+
+      <div class="status-strip own-strip" aria-label="本專案狀態">
+        <div class="status-cell" id="cell-e2e"><span class="dot" aria-hidden="true"></span><strong>發卡自檢</strong><small>載入中…</small></div>
+        <div class="status-cell" id="cell-own-api"><span class="dot" aria-hidden="true"></span><strong>本專案服務</strong><small>載入中…</small></div>
+        <div class="status-cell" id="cell-own-repo"><span class="dot" aria-hidden="true"></span><strong>本專案原始碼</strong><small>載入中…</small></div>
+      </div>
+
+      <details class="panel" id="panel-e2e" open>
+        <summary>發卡端到端自檢</summary>
+        <p class="panel-note">每天由 Worker 自己扮演一次皮夾：建立 offer、取回 offer 物件、讀 metadata、換 token、以 <code>openid4vci-proof+jwt</code> 領卡，再依查驗端的規則驗證這張卡。單點 ping 看不出發卡是否還能成功，這條可以。</p>
+        <div id="e2e-body" class="e2e-body"><p class="loading">載入中…</p></div>
+      </details>
+
+      <details class="panel" id="panel-own">
+        <summary>本專案的服務與撤銷清單</summary>
+        <div class="table-wrap"><table class="monitor-table" id="table-own-api">
+          <thead><tr><th>服務</th><th>狀態</th><th>延遲</th><th>近況</th><th>說明</th></tr></thead>
+          <tbody><tr><td colspan="5" class="loading">載入中…</td></tr></tbody>
+        </table></div>
+        <h3>本站模擬卡撤銷清單</h3>
+        <div class="table-wrap"><table class="monitor-table" id="table-status">
+          <thead><tr><th>清單</th><th>格式</th><th>位元總數</th><th>已撤銷</th><th>簽章金鑰在 DID 內</th><th>說明</th></tr></thead>
+          <tbody><tr><td colspan="6" class="loading">載入中…</td></tr></tbody>
+        </table></div>
+      </details>
+
+      <details class="panel" id="panel-own-repo">
+        <summary>本專案原始碼 Repo</summary>
+        <div class="table-wrap"><table class="monitor-table" id="table-own-repo">
+          <thead><tr><th>專案</th><th>最後更新</th><th>開放 issue</th><th>星數</th><th>授權</th><th>狀態</th></tr></thead>
+          <tbody><tr><td colspan="6" class="loading">載入中…</td></tr></tbody>
+        </table></div>
+      </details>
+    </section>
 
     <section class="timeline-section" aria-labelledby="timeline-title">
       <div class="intro-heading">
@@ -165,6 +203,17 @@ export const MONITOR_CSS = /* css */ `
 .monitor-table tr.own td,.trust-table tr.own td{color:var(--muted)}
 .monitor-table tr.own td strong{font-weight:600}
 .own-tag{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#e2e6e2;color:var(--muted);font-size:.72rem;font-weight:700;vertical-align:middle}
+.block-heading{max-width:760px;margin:0 0 22px}
+.block-heading h2{margin:0;font-size:clamp(1.8rem,4vw,2.8rem);line-height:1.15;letter-spacing:-.03em}
+.block-heading>p:last-child{margin:10px 0 0;color:var(--muted)}
+.official-block{margin-bottom:64px}
+/* The project's own services live in their own recessed block, so the official
+   ecosystem is never read through them. */
+.own-block{margin-bottom:64px;padding:clamp(22px,4vw,36px);border:1px solid var(--line);border-radius:26px;background:#eef1ee}
+.own-block .block-heading h2{font-size:clamp(1.4rem,3vw,2rem)}
+.own-block .panel{background:var(--card);border-color:#dfe4df}
+.own-block .status-strip{margin-bottom:24px}
+.own-strip{grid-template-columns:repeat(3,1fr)}
 .panel{margin:0 0 16px;padding:clamp(20px,4vw,32px);background:var(--card);border:1px solid var(--line);border-radius:22px}
 .panel>summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;font-size:1.25rem;font-weight:800}
 .panel>summary::-webkit-details-marker{display:none}
@@ -220,6 +269,8 @@ export const MONITOR_CSS = /* css */ `
   .pill.mute{background:#1b2b23}
   .monitor-table tr.own,.trust-table tr.own{background:#161d19}
   .own-tag{background:#243029}
+  .own-block{background:#101713;border-color:#243029}
+  .own-block .panel{border-color:#243029}
 }
 `;
 
@@ -260,7 +311,7 @@ function setCell(id,state,line){
 }
 
 function renderApi(checks){
-  const rows=checks.filter(c=>c.category==='api');
+  const rows=checks.filter(c=>c.category==='api'&&(!c.data||c.data.tier!=='own'));
   const body=$('table-api').tBodies[0];clear(body);
   if(!rows.length){const tr=document.createElement('tr');const td=text('td','尚無資料','loading');td.colSpan=6;tr.append(td);body.append(tr);return}
   rows.forEach(c=>{
@@ -278,6 +329,23 @@ function renderApi(checks){
   });
   const bad=rows.filter(c=>!c.ok).length;
   setCell('cell-api',bad?(bad>=rows.length/2?'bad':'warn'):'ok',bad?bad+' / '+rows.length+' 個端點異常':rows.length+' 個端點正常');
+}
+
+function renderOwnApi(checks){
+  const rows=checks.filter(c=>c.category==='api'&&c.data&&c.data.tier==='own');
+  const body=$('table-own-api').tBodies[0];clear(body);
+  if(!rows.length){const tr=document.createElement('tr');const td=text('td','尚無資料','loading');td.colSpan=5;tr.append(td);body.append(tr);return}
+  rows.forEach(c=>{
+    const tr=document.createElement('tr');
+    const name=document.createElement('td');name.append(text('strong',c.label));
+    if(c.data&&c.data.url)name.append(text('small',c.data.url));
+    const st=document.createElement('td');st.append(pill(c.ok?'正常':'異常',c.ok?'ok':'bad'));
+    const sp=document.createElement('td');sp.append(sparkline(c.history||[]));
+    tr.append(name,st,text('td',c.latencyMs===undefined?'—':c.latencyMs+' ms'),sp,text('td',c.detail||''));
+    body.append(tr);
+  });
+  const bad=rows.filter(c=>!c.ok).length;
+  setCell('cell-own-api',bad?'warn':'ok',bad?bad+' / '+rows.length+' 個異常':rows.length+' 個服務正常');
 }
 
 function renderE2E(checks){
@@ -360,29 +428,26 @@ async function loadTrustList(){
 }
 
 function renderStatus(checks){
-  const rows=checks.filter(c=>c.category==='status-list');
+  const rows=checks.filter(c=>c.category==='status-list'&&c.data&&c.data.tier==='own');
   const body=$('table-status').tBodies[0];clear(body);
-  if(!rows.length){const tr=document.createElement('tr');const td=text('td','尚無資料','loading');td.colSpan=7;tr.append(td);body.append(tr);return}
+  if(!rows.length){const tr=document.createElement('tr');const td=text('td','尚無資料','loading');td.colSpan=6;tr.append(td);body.append(tr);return}
   rows.forEach(c=>{
-    const d=c.data||{};const tr=document.createElement('tr');markTier(tr,d);
+    const d=c.data||{};const tr=document.createElement('tr');
     const name=document.createElement('td');name.append(text('strong',c.label));
-    const tag=ownTag(d);if(tag)name.append(tag);
     if(d.url)name.append(text('small',d.url));
     const fmt=d.format==='statuslist2021'?'StatusList2021':d.format==='token-status-list'?'Token Status List':'—';
     const key=document.createElement('td');
     if(d.keyInIssuerDid===true)key.append(pill('是','ok'));
     else if(d.keyInIssuerDid===false)key.append(pill('否','warn'));
     else key.append(pill('不適用','mute'));
-    tr.append(name,text('td',d.operator||'—'),text('td',fmt),
+    tr.append(name,text('td',fmt),
       text('td',d.totalBits===undefined?'—':d.totalBits.toLocaleString()),
       text('td',d.revokedBits===undefined?'—':String(d.revokedBits)),key,text('td',c.detail||''));
     body.append(tr);
   });
-  const bad=rows.filter(c=>!c.ok).length;
   const census=window.__census;
-  setCell('cell-status',bad?'warn':'ok',
-    census?census.entries.length+' 份清單 · 共 '+census.totalRevoked.toLocaleString()+' 張撤銷'
-          :(bad?bad+' / '+rows.length+' 份無法讀取':rows.length+' 份可讀取'));
+  setCell('cell-status',census&&census.entries.length?'ok':'warn',
+    census?census.entries.length+' 份清單 · 共 '+census.totalRevoked.toLocaleString()+' 張撤銷':'尚未普查');
 }
 
 function renderCensus(census){
@@ -424,25 +489,34 @@ function renderChain(chain){
     chain.mismatch?chain.mismatch+' 筆與鏈上不符':(chain.rpcOk?chain.verified+' 筆鏈上一致':'RPC 無法連線'));
 }
 
+function repoRow(c){
+  const d=c.data||{};const tr=document.createElement('tr');
+  const name=document.createElement('td');
+  if(d.url){const a=document.createElement('a');a.href=d.url;a.textContent=c.label;name.append(a)}else name.append(text('strong',c.label));
+  if(d.owner)name.append(text('small',d.owner+'/'+d.repo));
+  const st=document.createElement('td');st.append(pill(c.ok?'已讀取':'讀取失敗',c.ok?'ok':'bad'));
+  tr.append(name,text('td',d.pushedAt?ago(d.pushedAt)+'（'+when(d.pushedAt)+'）':'—'),
+    text('td',d.openIssues===undefined?'—':String(d.openIssues)),
+    text('td',d.stars===undefined?'—':String(d.stars)),
+    text('td',d.license||'—'),st);
+  if(!c.ok&&d.owner)tr.title=c.detail||'';
+  return tr;
+}
+function renderOwnRepos(checks){
+  const rows=checks.filter(c=>c.category==='repo'&&c.data&&c.data.tier==='own');
+  const body=$('table-own-repo').tBodies[0];clear(body);
+  if(!rows.length){const tr=document.createElement('tr');const td=text('td','尚無資料','loading');td.colSpan=6;tr.append(td);body.append(tr);return}
+  rows.forEach(c=>body.append(repoRow(c)));
+  const bad=rows.filter(c=>!c.ok).length;
+  setCell('cell-own-repo',bad?'warn':'ok',bad?bad+' 個無法讀取':rows.length+' 個專案');
+}
 function renderRepos(checks){
-  const rows=checks.filter(c=>c.category==='repo');
+  const rows=checks.filter(c=>c.category==='repo'&&c.data&&c.data.tier!=='own');
   const body=$('table-repo').tBodies[0];clear(body);
   if(!rows.length){const tr=document.createElement('tr');const td=text('td','尚無資料','loading');td.colSpan=6;tr.append(td);body.append(tr);return}
-  rows.forEach(c=>{
-    const d=c.data||{};const tr=document.createElement('tr');markTier(tr,d);
-    const name=document.createElement('td');
-    if(d.url){const a=document.createElement('a');a.href=d.url;a.textContent=c.label;name.append(a)}else name.append(text('strong',c.label));
-    const tag=ownTag(d);if(tag)name.append(tag);
-    if(d.owner)name.append(text('small',d.owner+'/'+d.repo));
-    const st=document.createElement('td');st.append(pill(c.ok?'已讀取':'讀取失敗',c.ok?'ok':'bad'));
-    tr.append(name,text('td',d.pushedAt?ago(d.pushedAt)+'（'+when(d.pushedAt)+'）':'—'),
-      text('td',d.openIssues===undefined?'—':String(d.openIssues)),
-      text('td',d.stars===undefined?'—':String(d.stars)),
-      text('td',d.license||'—'),st);
-    body.append(tr);
-  });
+  rows.forEach(c=>body.append(repoRow(c)));
   const bad=rows.filter(c=>!c.ok).length;
-  setCell('cell-repo',bad?'warn':'ok',bad?bad+' 個無法讀取':rows.length+' 個專案追蹤中');
+  setCell('cell-repo',bad?'warn':'ok',bad?bad+' / '+rows.length+' 個無法讀取':rows.length+' 個官方專案');
 }
 
 function renderTimeline(events){
@@ -461,6 +535,7 @@ function render(data){
   $('last-scan').textContent=data.lastRunAt?('最後掃描：'+when(data.lastRunAt)):'尚未掃描';
   $('schedule').textContent=data.schedule||'';
   renderApi(data.checks||[]);
+  renderOwnApi(data.checks||[]);
   renderE2E(data.checks||[]);
   renderTrust(data.trust);
   window.__census=data.census;
@@ -468,6 +543,7 @@ function render(data){
   renderStatus(data.checks||[]);
   renderChain(data.chain);
   renderRepos(data.checks||[]);
+  renderOwnRepos(data.checks||[]);
   renderTimeline(data.events);
 }
 

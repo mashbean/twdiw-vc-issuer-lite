@@ -215,6 +215,7 @@ describe("the dashboard page", () => {
       "table-api", "e2e-body", "trust-body", "trust-self", "trust-accepted", "trust-table", "trust-meta",
       "census-summary", "table-census", "census-meta",
       "table-status", "chain-body", "table-repo", "timeline",
+      "cell-own-api", "cell-own-repo", "table-own-api", "table-own-repo",
     ]) {
       expect(MONITOR_HTML, id).toContain(`id="${id}"`);
     }
@@ -251,10 +252,15 @@ describe("the dashboard page", () => {
     expect(MONITOR_JS).toContain("已撤銷卡片總數");
   });
 
-  it("recesses this project's own services so the official ecosystem leads", () => {
-    expect(MONITOR_CSS).toContain(".monitor-table tr.own");
-    expect(MONITOR_CSS).toContain(".own-tag");
-    expect(MONITOR_JS).toContain("data.tier==='own'");
+  it("keeps this project's own services in a separate block from the official ecosystem", () => {
+    expect(MONITOR_HTML).toContain('class="official-block"');
+    expect(MONITOR_HTML).toContain('class="own-block"');
+    expect(MONITOR_HTML).toContain("官方生態系");
+    expect(MONITOR_HTML).toContain("本專案（有備而來與 mashbean）");
+    expect(MONITOR_CSS).toContain(".own-block");
+    // The official tables must never carry an own-tier row, and vice versa.
+    expect(MONITOR_JS).toContain("c.data.tier!=='own'");
+    expect(MONITOR_JS).toContain("c.data.tier==='own'");
   });
 
   it("reads its data from the same origin and never polls", () => {
