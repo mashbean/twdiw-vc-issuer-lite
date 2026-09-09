@@ -1,0 +1,240 @@
+// The probes, the feeds and the dashboard shell.
+//
+// The probes are where the monitor's honesty lives: an endpoint that answers
+// 200 with the wrong shape must be reported as broken, an unreachable host must
+// be described as unreachable-from-here rather than down, and a status list
+// whose signature does not verify against the issuer's own DID must say so
+// without being turned into a daily red alarm.
+
+import { describe, expect, it, vi } from "vitest";
+import { atomFeed, jsonFeed } from "../src/feed";
+import { MONITOR_CSS, MONITOR_HTML, MONITOR_JS } from "../src/monitor-frontend";
+import { describeRoles, describeVerdict } from "../src/monitor-wording";
+import {
+  WATCHED_REPOS,
+  endpointTargets,
+  probeEndpoint,
+  probeRepo,
+  probeStatusList,
+  statusListTargets,
+} from "../src/probes";
+import { jwkJcsPubDidKey } from "../src/didkey";
+import { b64url, type Signer } from "../src/sdjwt";
+import { statusListJwt } from "../src/statuslist";
+
+const ORIGIN = "https://issuer.test";
+
+async function testSigner(): Promise<Signer> {
+  const pair = await crypto.subtle.generateKey(
+    { name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"],
+  ) as CryptoKeyPair;
+  const publicJwk = await crypto.subtle.exportKey("jwk", pair.publicKey) as JsonWebKey;
+  return {
+    didKey: jwkJcsPubDidKey({ kty: "EC", crv: "P-256", x: publicJwk.x!, y: publicJwk.y! }),
+    async sign(input) {
+      return b64url(new Uint8Array(await crypto.subtle.sign(
+        { name: "ECDSA", hash: "SHA-256" }, pair.privateKey, new TextEncoder().encode(input),
+      )));
+    },
+  };
+}
+
+function respondWith(body: string, init: ResponseInit = {}): typeof fetch {
+  return vi.fn(async () => new Response(body, { status: 200, ...init })) as unknown as typeof fetch;
+}
+
+describe("what the monitor watches", () => {
+  it("covers both ends of the ecosystem and this site itself", () => {
+    const ids = endpointTargets(ORIGIN).map((target) => target.id);
+    expect(ids).toContain("official-trust-api");
+    expect(ids).toContain("official-apply-catalog");
+    expect(ids).toContain("verifier-mashbean");
+    expect(ids).toContain("issuer-self-metadata");
+    // The self target must follow the deployment, not a hardcoded demo host.
+    const self = endpointTargets(ORIGIN).find((target) => target.id === "issuer-self-metadata");
+    expect(self?.url.startsWith(ORIGIN)).toBe(true);
+    expect(statusListTargets(ORIGIN)[0]?.url).toBe(`${ORIGIN}/status/1`);
+    expect(WATCHED_REPOS.map((repo) => repo.repo)).toContain("TWDIW-official-app");
+  });
+});
+
+describe("endpoint probing", () => {
+  const target = endpointTargets(ORIGIN).find((item) => item.id === "official-trust-api")!;
+
+  it("passes an endpoint whose body still has the shape wallets depend on", async () => {
+    const result = await probeEndpoint(target, respondWith(JSON.stringify({ data: { dids: [] } })));
+    expect(result.ok).toBe(true);
+    expect(result.httpStatus).toBe(200);
+    expect(typeof result.latencyMs).toBe("number");
+  });
+
+  it("fails a 200 whose shape changed, which a plain ping would call healthy", async () => {
+    const result = await probeEndpoint(target, respondWith(JSON.stringify({ data: { records: [] } })));
+    expect(result.ok).toBe(false);
+    expect(result.detail).toMatch(/data\.dids/);
+  });
+
+  it("fails a 200 that is not JSON at all", async () => {
+    const result = await probeEndpoint(target, respondWith("<html>維護中</html>"));
+    expect(result.ok).toBe(false);
+    expect(result.detail).toMatch(/不是 JSON/);
+  });
+
+  it("describes an unreachable host as unreachable from here, not as down", async () => {
+    const fetcher = vi.fn(async () => { throw new Error("connection refused"); }) as unknown as typeof fetch;
+    const result = await probeEndpoint(target, fetcher);
+    expect(result.ok).toBe(false);
+    expect(result.detail).toMatch(/從 Cloudflare 邊緣無法取得/);
+    expect(result.data?.unreachable).toBe(true);
+  });
+
+  it("keeps an informational target green on a 404, since it has no documented path", async () => {
+    const sandbox = endpointTargets(ORIGIN).find((item) => item.id === "demo-sandbox-issuer")!;
+    const result = await probeEndpoint(sandbox, respondWith("nope", { status: 404 }));
+    expect(result.ok).toBe(true);
+    expect(result.detail).toBe("HTTP 404");
+  });
+});
+
+describe("status list probing", () => {
+  const target = { id: "status-self", label: "本站撤銷清單", url: `${ORIGIN}/status/1`, operator: "mashbean" };
+
+  it("reads the bitstring and confirms the key is the one inside the issuer DID", async () => {
+    const signer = await testSigner();
+    const token = await statusListJwt(signer, { listUrl: target.url, revoked: [3, 9] });
+    const result = await probeStatusList(target, respondWith(token));
+    expect(result.ok).toBe(true);
+    expect(result.data?.keyInIssuerDid).toBe(true);
+    expect(result.data?.signatureVerified).toBe(true);
+    expect(result.data?.subjectMatchesUrl).toBe(true);
+    expect(result.data?.revokedBits).toBe(2);
+    expect(result.data?.format).toBe("statuslist2021");
+    expect(result.detail).toBe("正常");
+  });
+
+  it("reports a list signed by a key that is not in the issuer's DID, without calling it an outage", async () => {
+    // The measured production behaviour: the DID publishes one key and the
+    // status list is signed by another. Reachable and decodable, so `ok` stays
+    // true; the finding is carried in the detail and the flag.
+    const issuer = await testSigner();
+    const stranger = await testSigner();
+    const token = await statusListJwt(
+      { didKey: issuer.didKey, sign: stranger.sign }, { listUrl: target.url, revoked: [] },
+    );
+    const result = await probeStatusList(target, respondWith(token));
+    expect(result.ok).toBe(true);
+    expect(result.data?.keyInIssuerDid).toBe(false);
+    expect(result.detail).toMatch(/簽章未能以發行者 DID 內的金鑰驗證/);
+  });
+
+  it("notices a list whose sub does not match the URL it was served from", async () => {
+    const signer = await testSigner();
+    const token = await statusListJwt(signer, { listUrl: "https://elsewhere.test/status/1", revoked: [] });
+    const result = await probeStatusList(target, respondWith(token));
+    expect(result.data?.subjectMatchesUrl).toBe(false);
+    expect(result.detail).toMatch(/sub 與清單網址不符/);
+  });
+
+  it("fails an unreachable or non-JWT list", async () => {
+    expect((await probeStatusList(target, respondWith("nope", { status: 503 }))).ok).toBe(false);
+    const notAJwt = await probeStatusList(target, respondWith("plain text"));
+    expect(notAJwt.ok).toBe(false);
+    expect(notAJwt.detail).toMatch(/不是可解析的 JWT/);
+  });
+});
+
+describe("repository activity", () => {
+  it("reports how long ago the code last moved", async () => {
+    const pushedAt = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    const fetcher = respondWith(JSON.stringify({
+      pushed_at: pushedAt, open_issues_count: 4, stargazers_count: 12,
+      default_branch: "main", license: { spdx_id: "GPL-3.0-only" },
+    }));
+    const result = await probeRepo(WATCHED_REPOS[0]!, { fetcher });
+    expect(result.ok).toBe(true);
+    expect(result.detail).toBe("3 天前更新");
+    expect(result.data?.openIssues).toBe(4);
+    expect(result.data?.license).toBe("GPL-3.0-only");
+  });
+
+  it("names the rate limit rather than reporting a mystery failure", async () => {
+    const result = await probeRepo(WATCHED_REPOS[0]!, { fetcher: respondWith("", { status: 403 }) });
+    expect(result.ok).toBe(false);
+    expect(result.detail).toMatch(/配額/);
+  });
+});
+
+describe("wording shared by the dashboard", () => {
+  it("names roles and verdicts in the page's language", () => {
+    expect(describeRoles([1])).toBe("發行者");
+    expect(describeRoles([1, 2])).toBe("發行者＋驗證者");
+    expect(describeRoles([])).toBe("未標示");
+    expect(describeVerdict("verified")).toBe("鏈上一致");
+    expect(describeVerdict("mismatch")).toBe("與鏈上不符");
+    expect(describeVerdict("notAnchored")).toBe("未上鏈");
+  });
+});
+
+describe("feeds", () => {
+  const events = [
+    { at: 1_757_000_000_000, kind: "trust-added", target: "trust-list", summary: "信任清單新增：某某機關", detail: "did:key:zAbc" },
+    { at: 1_756_900_000_000, kind: "down", target: "official-trust-api", summary: "官方信任清單 API 異常" },
+  ];
+
+  it("publishes only changes, with stable ids", () => {
+    const feed = JSON.parse(jsonFeed(ORIGIN, events)) as { items: Array<{ id: string; title: string }> };
+    expect(feed.items).toHaveLength(2);
+    expect(feed.items[0]!.title).toMatch(/信任清單新增/);
+    expect(new Set(feed.items.map((item) => item.id)).size).toBe(2);
+    expect(jsonFeed(ORIGIN, events)).toBe(jsonFeed(ORIGIN, events));
+  });
+
+  it("escapes XML so a hostile organisation name cannot break the Atom feed", () => {
+    const hostile = [{ at: 1, kind: "trust-added", target: "t", summary: `<script>&"'`, detail: "x" }];
+    const xml = atomFeed(ORIGIN, hostile);
+    expect(xml).not.toContain("<script>");
+    expect(xml).toContain("&lt;script&gt;");
+    expect(xml).toContain("&amp;");
+    expect(xml.startsWith("<?xml")).toBe(true);
+  });
+});
+
+describe("the dashboard page", () => {
+  it("keeps every element id the script drives", () => {
+    for (const id of [
+      "last-scan", "schedule", "refresh", "refresh-note", "load-error",
+      "cell-api", "cell-e2e", "cell-trust", "cell-status", "cell-chain", "cell-repo",
+      "table-api", "e2e-body", "trust-body", "table-status", "chain-body", "table-repo", "timeline",
+    ]) {
+      expect(MONITOR_HTML, id).toContain(`id="${id}"`);
+    }
+  });
+
+  it("loads its own stylesheet on top of the shared one and offers both feeds", () => {
+    expect(MONITOR_HTML).toContain('<link rel="stylesheet" href="/app.css">');
+    expect(MONITOR_HTML).toContain('<link rel="stylesheet" href="/monitor.css">');
+    expect(MONITOR_HTML).toContain('<script src="/monitor.js" defer></script>');
+    expect(MONITOR_HTML).toContain('href="/monitor/feed.json"');
+    expect(MONITOR_HTML).toContain('href="/monitor/feed.xml"');
+    expect(MONITOR_CSS).toContain(".status-strip");
+    expect(MONITOR_CSS).toContain(".timeline");
+  });
+
+  it("states the boundaries the data cannot cross", () => {
+    expect(MONITOR_HTML).toContain("從 Cloudflare 邊緣單點觀測");
+    expect(MONITOR_HTML).toContain("撤銷清單只涵蓋已知網址的清單");
+    expect(MONITOR_HTML).toContain("沒有憑證到期監測");
+    expect(MONITOR_HTML).toContain("每天掃一次");
+    expect(MONITOR_HTML).toContain("不在官方信任清單上");
+  });
+
+  it("reads its data from the same origin and never polls", () => {
+    expect(MONITOR_JS).toContain("fetch('/api/monitor'");
+    expect(MONITOR_JS).toContain("/api/monitor/refresh");
+    expect(MONITOR_JS).not.toContain("setInterval");
+    // No cross-origin request: every fetch is a same-origin path. (The one
+    // `http://` in the file is the SVG namespace URI, which is an identifier,
+    // not an address anything is fetched from.)
+    expect(MONITOR_JS).not.toMatch(/fetch\(['"`]https?:/);
+  });
+});

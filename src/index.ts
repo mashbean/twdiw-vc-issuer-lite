@@ -16,10 +16,13 @@ import {
   splitCompoundToken,
   tokenResponse,
 } from "./offer";
+import { atomFeed, jsonFeed } from "./feed";
+import { MIN_MANUAL_INTERVAL_MS, MonitorState } from "./monitor";
+import { MONITOR_CSS, MONITOR_HTML, MONITOR_JS } from "./monitor-frontend";
 import { PresentationSession } from "./session";
 import { cachedOfficialTrustList, officialTrustFor } from "./trust";
 
-export { IssuerIdentity, IssuanceSession, PresentationSession };
+export { IssuerIdentity, IssuanceSession, PresentationSession, MonitorState };
 
 const MAX_JSON_BODY = 8_192;
 const MAX_CREDENTIAL_BODY = 32_768;
@@ -90,7 +93,7 @@ async function limitedJson(request: Request, limit: number): Promise<{ ok: true;
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
     const origin = publicOrigin(request, env);
@@ -99,6 +102,43 @@ export default {
     if (request.method === "GET" && (path === "/" || path === "/index.html")) return staticAsset(request, FRONTEND_HTML, "text/html");
     if (request.method === "GET" && path === "/app.css") return staticAsset(request, FRONTEND_CSS, "text/css");
     if (request.method === "GET" && path === "/app.js") return staticAsset(request, FRONTEND_JS, "text/javascript");
+
+    // ── Ecosystem monitor ────────────────────────────────────────────────
+    if (request.method === "GET" && path === "/monitor") return staticAsset(request, MONITOR_HTML, "text/html");
+    if (request.method === "GET" && path === "/monitor.css") return staticAsset(request, MONITOR_CSS, "text/css");
+    if (request.method === "GET" && path === "/monitor.js") return staticAsset(request, MONITOR_JS, "text/javascript");
+
+    if (request.method === "GET" && path === "/api/monitor") {
+      const monitor = env.MONITOR.getByName("ecosystem");
+      const payload = await monitor.dashboard();
+      // A deployment that has never scanned would otherwise show an empty page
+      // until the next nightly cron. Start the first scan behind the response so
+      // the visitor gets data on their next reload rather than a long wait now.
+      if (!payload.lastRunAt) {
+        ctx.waitUntil(monitor.runIfStale(origin, MIN_MANUAL_INTERVAL_MS).catch(() => undefined));
+      }
+      return json(request, payload);
+    }
+
+    if (request.method === "POST" && path === "/api/monitor/refresh") {
+      const monitor = env.MONITOR.getByName("ecosystem");
+      const ran = await monitor.runIfStale(origin, MIN_MANUAL_INTERVAL_MS);
+      return json(request, {
+        ran,
+        message: ran ? "掃描完成" : "距離上次掃描還不到一小時，未重新掃描",
+      });
+    }
+
+    if (request.method === "GET" && (path === "/monitor/feed.json" || path === "/monitor/feed.xml")) {
+      const events = await env.MONITOR.getByName("ecosystem").recentEvents(50);
+      const isJSON = path.endsWith(".json");
+      return respond(request, isJSON ? jsonFeed(origin, events) : atomFeed(origin, events), {
+        headers: {
+          "content-type": isJSON ? "application/feed+json; charset=utf-8" : "application/atom+xml; charset=utf-8",
+          "cache-control": "public, max-age=600",
+        },
+      });
+    }
 
     // ── OID4VCI issuer metadata ──────────────────────────────────────────
     if (request.method === "GET" && path === "/.well-known/openid-credential-issuer") {
@@ -312,5 +352,13 @@ export default {
     }
 
     return respond(request, "not found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
+  },
+
+  /** The daily ecosystem scan. One a day: the registers it watches move slowly,
+   *  and a monitor that hammers other people's infrastructure to look busy is a
+   *  worse citizen than the thing it is watching. */
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    const origin = env.ISSUER_ORIGIN?.trim().replace(/\/$/, "") || "https://issuer.mashbean.net";
+    ctx.waitUntil(env.MONITOR.getByName("ecosystem").run(origin).then(() => undefined));
   },
 } satisfies ExportedHandler<Env>;

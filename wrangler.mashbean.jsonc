@@ -18,12 +18,20 @@
     "bindings": [
       { "name": "IDENTITY", "class_name": "IssuerIdentity" },
       { "name": "ISSUANCES", "class_name": "IssuanceSession" },
-      { "name": "SESSIONS", "class_name": "PresentationSession" }
+      { "name": "SESSIONS", "class_name": "PresentationSession" },
+      { "name": "MONITOR", "class_name": "MonitorState" }
     ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["IssuerIdentity", "IssuanceSession", "PresentationSession"] }
+    { "tag": "v1", "new_sqlite_classes": ["IssuerIdentity", "IssuanceSession", "PresentationSession"] },
+    { "tag": "v2", "new_sqlite_classes": ["MonitorState"] }
   ],
+  // One ecosystem scan a day, 02:00 UTC (10:00 Taipei). The trust list,
+  // revocation lists and on-chain registry move on the scale of days, so a
+  // daily rhythm is both enough to catch every change and light on the
+  // infrastructure being watched.
+  "triggers": { "crons": ["0 2 * * *"] },
+
   "vars": {
     "OFFICIAL_TRUST_REGISTRY_URL": "https://frontend.wallet.gov.tw/api/did",
     "ISSUER_ORIGIN": "https://issuer.mashbean.net"

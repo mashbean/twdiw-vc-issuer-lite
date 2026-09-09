@@ -14,6 +14,8 @@
 // not trust any count field. Both `orgType` values are fetched; an organisation
 // registered as both appears twice and is merged by DID.
 
+import type { Registration } from "./chain";
+
 export interface TrustEntry {
   did: string;
   name: string;
@@ -27,6 +29,12 @@ export interface TrustEntry {
   network?: string;
   contract?: string;
   transactionHash?: string;
+  /** One entry per API row behind this DID. An organisation registered as both
+   *  an issuer and a verifier has two, each with its own category values and
+   *  its own anchoring transaction, and the chain check compares them
+   *  separately — merging them would compare a row against another row's
+   *  transaction. Carried for the monitor; the card page ignores it. */
+  registrations: Registration[];
 }
 
 export interface TrustList {
@@ -44,7 +52,11 @@ const CACHE_TTL_S = 600;
 
 interface RawRecord {
   id?: unknown;
+  /** The signed DID document the registry stores under its historical `did`
+   *  property — one of the strings the registry contract was called with. */
+  did?: unknown;
   orgType?: unknown;
+  orgGroup?: unknown;
   status?: unknown;
   org?: { name?: unknown; name_en?: unknown; taxId?: unknown; issuerMetadataBaseURL?: unknown; serviceBaseURL?: unknown };
   onChainHistory?: Array<{ net?: unknown; scAddress?: unknown; txHash?: unknown; status?: unknown }>;
@@ -79,8 +91,23 @@ export function parseTrustPage(json: unknown): TrustEntry[] {
     const issuerMetadataBaseURL = asString(record.org.issuerMetadataBaseURL);
     const serviceBaseURL = asString(record.org.serviceBaseURL);
     const hosts = [...new Set([hostOf(issuerMetadataBaseURL), hostOf(serviceBaseURL)].filter((host): host is string => !!host))];
+    const registration: Registration = {
+      did: record.id,
+      orgType: typeof record.orgType === "number" ? record.orgType : 0,
+      orgGroup: typeof record.orgGroup === "number" ? record.orgGroup : 0,
+      signedDIDDocument: asString(record.did) ?? "",
+      organisation: record.org,
+      onChainRecords: (record.onChainHistory ?? []).flatMap((item) => {
+        const net = asString(item.net);
+        const scAddress = asString(item.scAddress);
+        const txHash = asString(item.txHash);
+        if (!net || !scAddress || !txHash) return [];
+        return [{ net, scAddress, txHash, status: Number(item.status) }];
+      }),
+    };
     return [{
       did: record.id,
+      registrations: [registration],
       name: asString(record.org.name) ?? "（未提供名稱）",
       nameEnglish: asString(record.org.name_en),
       taxId: asString(record.org.taxId),
@@ -102,11 +129,17 @@ export function mergeTrustEntries(entries: TrustEntry[]): TrustEntry[] {
   for (const entry of entries) {
     const existing = byDid.get(entry.did);
     if (!existing) {
-      byDid.set(entry.did, { ...entry, orgTypes: [...entry.orgTypes], hosts: [...entry.hosts] });
+      byDid.set(entry.did, {
+        ...entry,
+        orgTypes: [...entry.orgTypes],
+        hosts: [...entry.hosts],
+        registrations: [...entry.registrations],
+      });
       continue;
     }
     existing.orgTypes = [...new Set([...existing.orgTypes, ...entry.orgTypes])].sort();
     existing.hosts = [...new Set([...existing.hosts, ...entry.hosts])];
+    existing.registrations = [...existing.registrations, ...entry.registrations];
     existing.issuerMetadataBaseURL ??= entry.issuerMetadataBaseURL;
     existing.serviceBaseURL ??= entry.serviceBaseURL;
     existing.onChain ||= entry.onChain;

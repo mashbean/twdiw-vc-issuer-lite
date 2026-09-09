@@ -26,6 +26,7 @@ export const FRONTEND_HTML = /* html */ `<!doctype html>
       <a href="#collect">立即領卡</a>
       <a href="#present">出示測試</a>
       <a href="#trust">信任清單</a>
+      <a href="/monitor">監測儀表板</a>
       <a href="#developers">免費部署</a>
       <a href="https://github.com/mashbean/twdiw-vc-issuer-lite">GitHub</a>
     </nav>
@@ -282,6 +283,7 @@ export const FRONTEND_HTML = /* html */ `<!doctype html>
         <a href="https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html"><strong>OpenID4VCI 1.0</strong><span>標準規格</span></a>
         <a href="https://github.com/mashbean/twdiw-vc-issuer-lite"><strong>Issuer Lite</strong><span>原始碼與部署說明</span></a>
         <a href="https://github.com/mashbean/twdiw-vp-verifier-lite"><strong>Verifier Lite</strong><span>查驗端原始碼</span></a>
+        <a href="/monitor"><strong>生態系監測</strong><span>/monitor · 信任清單、撤銷、鏈上與 API 每日變更</span></a>
       </div>
     </section>
   </main>
