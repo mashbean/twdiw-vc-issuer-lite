@@ -394,8 +394,8 @@ $('refresh').onclick=async()=>{
   try{
     const response=await fetch('/api/monitor/refresh',{method:'POST'});
     const data=await response.json();
-    $('refresh-note').textContent=data.ran?'掃描完成。':(data.message||'距離上次掃描還不到一小時，顯示的是既有資料。');
-    await load();
+    $('refresh-note').textContent=data.message||'';
+    if(data.started){setTimeout(load,30000)}else{await load()}
   }catch(error){
     $('refresh-note').textContent='無法觸發掃描：'+(error&&error.message?error.message:'未知錯誤');
   }finally{button.disabled=false}

@@ -121,11 +121,17 @@ export default {
     }
 
     if (request.method === "POST" && path === "/api/monitor/refresh") {
+      // Started, never awaited. A full scan takes tens of seconds — it walks
+      // the registry, the chain in paced batches, and a real issuance — which
+      // is far longer than a request should be held open, and holding it open
+      // is what made this route throw in production.
       const monitor = env.MONITOR.getByName("ecosystem");
-      const ran = await monitor.runIfStale(origin, MIN_MANUAL_INTERVAL_MS);
+      const last = await monitor.lastRunAt();
+      const stale = last === undefined || Date.now() - last >= MIN_MANUAL_INTERVAL_MS;
+      if (stale) ctx.waitUntil(monitor.run(origin).then(() => undefined).catch(() => undefined));
       return json(request, {
-        ran,
-        message: ran ? "掃描完成" : "距離上次掃描還不到一小時，未重新掃描",
+        started: stale,
+        message: stale ? "掃描已開始，約半分鐘後重新整理即可看到結果" : "距離上次掃描還不到一小時，顯示的是既有資料",
       });
     }
 
