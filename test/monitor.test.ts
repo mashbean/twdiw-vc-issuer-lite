@@ -53,7 +53,14 @@ describe("what the monitor watches", () => {
     // The self target must follow the deployment, not a hardcoded demo host.
     const self = endpointTargets(ORIGIN).find((target) => target.id === "issuer-self-metadata");
     expect(self?.url.startsWith(ORIGIN)).toBe(true);
-    expect(statusListTargets(ORIGIN)[0]?.url).toBe(`${ORIGIN}/status/1`);
+    // The production revocation registers come first; this site's own list is
+    // the recessed one at the end.
+    const lists = statusListTargets(ORIGIN);
+    expect(lists.filter((list) => list.tier === "official").length).toBeGreaterThanOrEqual(4);
+    expect(lists.every((list) => list.tier !== "official" || list.url.includes(".wallet.gov.tw"))).toBe(true);
+    expect(lists.at(-1)?.url).toBe(`${ORIGIN}/status/1`);
+    expect(lists.some((list) => list.url.includes("issuer-oid4vci") || list.url.includes("demo"))).toBe(false);
+    expect(WATCHED_REPOS.filter((repo) => repo.owner === "moda-gov-tw").length).toBeGreaterThanOrEqual(3);
     expect(WATCHED_REPOS.map((repo) => repo.repo)).toContain("TWDIW-official-app");
   });
 });
@@ -97,7 +104,7 @@ describe("endpoint probing", () => {
 });
 
 describe("status list probing", () => {
-  const target = { id: "status-self", label: "本站撤銷清單", url: `${ORIGIN}/status/1`, operator: "mashbean" };
+  const target = { id: "status-self", label: "本站撤銷清單", url: `${ORIGIN}/status/1`, operator: "mashbean", tier: "own" as const };
 
   it("reads the bitstring and confirms the key is the one inside the issuer DID", async () => {
     const signer = await testSigner();
@@ -204,7 +211,8 @@ describe("the dashboard page", () => {
     for (const id of [
       "last-scan", "schedule", "refresh", "refresh-note", "load-error",
       "cell-api", "cell-e2e", "cell-trust", "cell-status", "cell-chain", "cell-repo",
-      "table-api", "e2e-body", "trust-body", "table-status", "chain-body", "table-repo", "timeline",
+      "table-api", "e2e-body", "trust-body", "trust-self", "trust-accepted", "trust-table", "trust-meta",
+      "table-status", "chain-body", "table-repo", "timeline",
     ]) {
       expect(MONITOR_HTML, id).toContain(`id="${id}"`);
     }
@@ -226,6 +234,18 @@ describe("the dashboard page", () => {
     expect(MONITOR_HTML).toContain("沒有憑證到期監測");
     expect(MONITOR_HTML).toContain("每天掃一次");
     expect(MONITOR_HTML).toContain("不在官方信任清單上");
+  });
+
+  it("keeps the trust list on the page instead of sending the reader elsewhere", () => {
+    expect(MONITOR_JS).toContain("fetch('/api/trust-list'");
+    expect(MONITOR_HTML).toContain("完整清單就在這裡");
+    expect(MONITOR_HTML).not.toContain('href="/#trust"');
+  });
+
+  it("recesses this project's own services so the official ecosystem leads", () => {
+    expect(MONITOR_CSS).toContain(".monitor-table tr.own");
+    expect(MONITOR_CSS).toContain(".own-tag");
+    expect(MONITOR_JS).toContain("data.tier==='own'");
   });
 
   it("reads its data from the same origin and never polls", () => {

@@ -42,12 +42,18 @@ export interface CheckResult {
   data?: Record<string, JsonValue>;
 }
 
+/** Whose infrastructure this is. The dashboard exists to watch the official
+ *  ecosystem; this project's own services are shown for completeness and are
+ *  visually recessed so they never compete with what matters. */
+export type Tier = "official" | "own";
+
 export interface EndpointTarget {
   id: string;
   label: string;
   url: string;
   /** Where this endpoint sits in the ecosystem, shown as a column. */
   operator: string;
+  tier: Tier;
   method?: "GET" | "POST";
   body?: string;
   /** Returns a problem string when the body is reachable but the wrong shape. */
@@ -70,6 +76,7 @@ export function endpointTargets(selfOrigin: string): EndpointTarget[] {
       id: "official-trust-api",
       label: "官方信任清單 API",
       operator: "數位發展部",
+      tier: "official",
       url: "https://frontend.wallet.gov.tw/api/did?size=20&page=0&orgType=1&status=1",
       expect: (body) => {
         const data = asRecord(asRecord(body)?.data);
@@ -80,6 +87,7 @@ export function endpointTargets(selfOrigin: string): EndpointTarget[] {
       id: "official-apply-catalog",
       label: "官方申請新卡目錄",
       operator: "數位發展部",
+      tier: "official",
       url: "https://frontend.wallet.gov.tw/api/moda/dwapp/apply/vcList?name=&page=0&size=50",
       expect: (body) => {
         const data = asRecord(asRecord(body)?.data);
@@ -90,6 +98,7 @@ export function endpointTargets(selfOrigin: string): EndpointTarget[] {
       id: "official-wallet-site",
       label: "數位憑證皮夾官網",
       operator: "數位發展部",
+      tier: "official",
       url: "https://wallet.gov.tw/",
       // The site refuses datacentre traffic (403 to this Worker and to a plain
       // curl from a laptop alike). That is bot protection, not an outage, so it
@@ -100,6 +109,7 @@ export function endpointTargets(selfOrigin: string): EndpointTarget[] {
       id: "demo-sandbox-issuer",
       label: "官方沙盒發行端",
       operator: "數位發展部（沙盒）",
+      tier: "official",
       url: "https://issuer-oid4vci.wallet.gov.tw/",
       // The sandbox has no documented public landing path, so any HTTP answer
       // proves it is up. Marked informational so a 404 is not read as an outage.
@@ -109,6 +119,7 @@ export function endpointTargets(selfOrigin: string): EndpointTarget[] {
       id: "verifier-mashbean",
       label: "請出示皮夾（查驗端）",
       operator: "mashbean",
+      tier: "own",
       url: "https://verifier.mashbean.net/api/profiles",
       expect: (body) => Array.isArray(asRecord(body)?.profiles) ? null : "回應沒有 profiles 陣列",
     },
@@ -116,6 +127,7 @@ export function endpointTargets(selfOrigin: string): EndpointTarget[] {
       id: "issuer-self-metadata",
       label: "請收下卡片（本站發行端）",
       operator: "mashbean",
+      tier: "own",
       url: `${selfOrigin}/.well-known/openid-credential-issuer`,
       expect: (body) => typeof asRecord(body)?.credential_endpoint === "string"
         ? null
@@ -125,6 +137,7 @@ export function endpointTargets(selfOrigin: string): EndpointTarget[] {
       id: "vct-metadata",
       label: "有備而來 vct 型別中繼資料",
       operator: "bonds-tw",
+      tier: "own",
       url: "https://bonds-tw.github.io/vct/index.json",
       informational: true,
     },
@@ -133,30 +146,63 @@ export function endpointTargets(selfOrigin: string): EndpointTarget[] {
 
 /** Which status lists can be watched at all: only the ones whose URL is known.
  *  A status list URL lives inside an issued credential, so this is necessarily
- *  a partial view of revocation across the ecosystem, and the page says so. */
-export function statusListTargets(selfOrigin: string): Array<{ id: string; label: string; url: string; operator: string }> {
+ *  a partial view of revocation across the ecosystem, and the page says so.
+ *
+ *  These four are the production lists, found 2026-09-09 by taking each
+ *  issuer's `serviceBaseURL` from the official trust list and following the
+ *  path shape a real issued credential uses:
+ *  `<serviceBaseURL>/vc/api/status-list/<credential type>/r0`. They are the
+ *  live revocation registers for the cards people actually hold. */
+export function statusListTargets(selfOrigin: string): Array<{ id: string; label: string; url: string; operator: string; tier: Tier }> {
   return [
+    {
+      id: "status-driverlicense",
+      label: "駕照電子卡撤銷清單",
+      operator: "交通部公路局",
+      tier: "official",
+      url: "https://03711905.wallet.gov.tw/vc/api/status-list/2-16-886-101-20003-20008-20082_driverlicense_car_1211/r0",
+    },
+    {
+      id: "status-twm",
+      label: "台灣大哥大門號卡撤銷清單",
+      operator: "台灣大哥大",
+      tier: "official",
+      url: "https://97176270.wallet.gov.tw/vc/api/status-list/97176270_twmdiwvc_postpaid/r0",
+    },
+    {
+      id: "status-fet",
+      label: "遠傳門號卡撤銷清單",
+      operator: "遠傳電信",
+      tier: "official",
+      url: "https://97179430.wallet.gov.tw/vc/api/status-list/97179430_fet_vc_prod/r0",
+    },
+    {
+      id: "status-cht",
+      label: "中華電信門號卡撤銷清單",
+      operator: "中華電信",
+      tier: "official",
+      url: "https://chtmecard.wallet.gov.tw/vc/api/status-list/96979933_name_phonel5_phonel3/r0",
+    },
     {
       id: "status-self",
       label: "本站模擬卡撤銷清單",
       operator: "mashbean",
+      tier: "own",
       url: `${selfOrigin}/status/1`,
-    },
-    {
-      id: "status-demo-drivinglicense",
-      label: "官方沙盒駕照卡撤銷清單",
-      operator: "數位發展部（沙盒）",
-      url: "https://issuer-vc.wallet.gov.tw/api/status-list/00000000_demo_drivinglicense_202504251418/r0",
     },
   ];
 }
 
-export const WATCHED_REPOS = [
-  { id: "repo-official-app", owner: "moda-gov-tw", repo: "TWDIW-official-app", label: "官方皮夾 App" },
-  { id: "repo-verifier", owner: "mashbean", repo: "twdiw-vp-verifier-lite", label: "請出示皮夾" },
-  { id: "repo-issuer", owner: "mashbean", repo: "twdiw-vc-issuer-lite", label: "請收下卡片" },
-  { id: "repo-wallet", owner: "bonds-tw", repo: "Bonds-iOS", label: "有備而來 皮夾" },
-  { id: "repo-site", owner: "bonds-tw", repo: "bonds-tw.github.io", label: "有備而來 網站與 vct" },
+export const WATCHED_REPOS: Array<{ id: string; owner: string; repo: string; label: string; tier: Tier }> = [
+  // The official ones first: the wallet app people install, the ecosystem
+  // repository, and the DID work the trust list rests on.
+  { id: "repo-official-app", owner: "moda-gov-tw", repo: "TWDIW-official-app", label: "官方皮夾 App", tier: "official" },
+  { id: "repo-twdiw", owner: "moda-gov-tw", repo: "TW-DIW", label: "官方 TW-DIW", tier: "official" },
+  { id: "repo-tw-did", owner: "moda-gov-tw", repo: "tw-did", label: "官方 tw-did", tier: "official" },
+  { id: "repo-verifier", owner: "mashbean", repo: "twdiw-vp-verifier-lite", label: "請出示皮夾", tier: "own" },
+  { id: "repo-issuer", owner: "mashbean", repo: "twdiw-vc-issuer-lite", label: "請收下卡片", tier: "own" },
+  { id: "repo-wallet", owner: "bonds-tw", repo: "Bonds-iOS", label: "有備而來 皮夾", tier: "own" },
+  { id: "repo-site", owner: "bonds-tw", repo: "bonds-tw.github.io", label: "有備而來 網站與 vct", tier: "own" },
 ];
 
 // ── HTTP endpoint probe ─────────────────────────────────────────────────
@@ -179,7 +225,7 @@ export async function probeEndpoint(
         target: target.id, category: "api", label: target.label,
         ok: Boolean(target.informational), httpStatus: response.status, latencyMs,
         detail: `HTTP ${response.status}`,
-        data: { operator: target.operator, url: target.url },
+        data: { operator: target.operator, url: target.url, tier: target.tier },
       };
     }
     if (target.expect) {
@@ -190,7 +236,7 @@ export async function probeEndpoint(
         return {
           target: target.id, category: "api", label: target.label,
           ok: false, httpStatus: response.status, latencyMs, detail: "回應不是 JSON",
-          data: { operator: target.operator, url: target.url },
+          data: { operator: target.operator, url: target.url, tier: target.tier },
         };
       }
       const problem = target.expect(parsed);
@@ -198,14 +244,14 @@ export async function probeEndpoint(
         return {
           target: target.id, category: "api", label: target.label,
           ok: false, httpStatus: response.status, latencyMs, detail: problem,
-          data: { operator: target.operator, url: target.url },
+          data: { operator: target.operator, url: target.url, tier: target.tier },
         };
       }
     }
     return {
       target: target.id, category: "api", label: target.label,
       ok: true, httpStatus: response.status, latencyMs, detail: "正常",
-      data: { operator: target.operator, url: target.url },
+      data: { operator: target.operator, url: target.url, tier: target.tier },
     };
   } catch (error) {
     return {
@@ -214,7 +260,7 @@ export async function probeEndpoint(
       // A Worker cannot tell a refused connection from an edge-level block, so
       // the wording stops at what is true: this vantage point could not reach it.
       detail: `從 Cloudflare 邊緣無法取得（${error instanceof Error ? error.message : "未知錯誤"}）`,
-      data: { operator: target.operator, url: target.url, unreachable: true },
+      data: { operator: target.operator, url: target.url, tier: target.tier, unreachable: true },
     };
   }
 }
@@ -273,7 +319,7 @@ export interface StatusListFinding {
 }
 
 export async function probeStatusList(
-  target: { id: string; label: string; url: string; operator: string },
+  target: { id: string; label: string; url: string; operator: string; tier: Tier },
   fetcher: typeof fetch = fetch,
 ): Promise<CheckResult> {
   const started = Date.now();
@@ -386,13 +432,13 @@ export async function probeStatusList(
       httpStatus: response.status,
       latencyMs,
       detail: problems.length ? problems.join("；") : "正常",
-      data: { operator: target.operator, url: target.url, ...finding },
+      data: { operator: target.operator, url: target.url, tier: target.tier, ...finding },
     };
   } catch (error) {
     return {
       ...base, ok: false, latencyMs: Date.now() - started,
       detail: `無法取得（${error instanceof Error ? error.message : "未知錯誤"}）`,
-      data: { operator: target.operator, url: target.url, unreachable: true },
+      data: { operator: target.operator, url: target.url, tier: target.tier, unreachable: true },
     };
   }
 }
@@ -423,7 +469,7 @@ export async function probeRepo(
                detail: response.status === 403
                  ? "GitHub 匿名配額用盡（Cloudflare 共用 IP 常被用完）；設定 GITHUB_TOKEN secret 即可解決"
                  : `HTTP ${response.status}`,
-               data: { owner: entry.owner, repo: entry.repo } };
+               data: { owner: entry.owner, repo: entry.repo, tier: entry.tier } };
     }
     const body = await response.json() as {
       pushed_at?: string; open_issues_count?: number; stargazers_count?: number;
@@ -435,7 +481,7 @@ export async function probeRepo(
       ...base, ok: true, httpStatus: response.status, latencyMs,
       detail: days === undefined ? "已讀取" : days === 0 ? "今天有更新" : `${days} 天前更新`,
       data: {
-        owner: entry.owner, repo: entry.repo,
+        owner: entry.owner, repo: entry.repo, tier: entry.tier,
         url: `https://github.com/${entry.owner}/${entry.repo}`,
         pushedAt, openIssues: body.open_issues_count, stars: body.stargazers_count,
         defaultBranch: body.default_branch, archived: body.archived,
@@ -446,7 +492,7 @@ export async function probeRepo(
     return {
       ...base, ok: false, latencyMs: Date.now() - started,
       detail: `無法取得（${error instanceof Error ? error.message : "未知錯誤"}）`,
-      data: { owner: entry.owner, repo: entry.repo },
+      data: { owner: entry.owner, repo: entry.repo, tier: entry.tier },
     };
   }
 }

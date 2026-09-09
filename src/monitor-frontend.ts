@@ -72,8 +72,15 @@ export const MONITOR_HTML = /* html */ `<!doctype html>
 
     <details class="panel" id="panel-trust">
       <summary>官方信任清單</summary>
-      <p class="panel-note">數位發展部登記的發行者與驗證者。完整表格在<a href="/#trust">首頁的信任清單區塊</a>；這裡只看總量與變化。</p>
+      <p class="panel-note">數位發展部登記的發行者與驗證者，完整清單就在這裡。表格即時讀取官方 API；本站的自評列在最上方，誠實標示它不在清單上、又被誰接受。</p>
       <div id="trust-body"><p class="loading">載入中…</p></div>
+      <div id="trust-self"></div>
+      <div id="trust-accepted" class="accepted-by"></div>
+      <div class="table-wrap"><table class="trust-table" id="trust-table">
+        <thead><tr><th>機構</th><th>角色</th><th>登記端點</th><th>DID</th><th>鏈上紀錄</th></tr></thead>
+        <tbody><tr><td colspan="5" class="loading">載入中…</td></tr></tbody>
+      </table></div>
+      <p id="trust-meta" class="trust-meta"></p>
     </details>
 
     <details class="panel" id="panel-status">
@@ -145,6 +152,12 @@ export const MONITOR_CSS = /* css */ `
 .status-cell.ok .dot{background:var(--green)}
 .status-cell.warn .dot{background:var(--amber)}
 .status-cell.bad .dot{background:var(--red)}
+/* This project's own services are shown for completeness, not as the subject.
+   Recessing them keeps the official ecosystem the thing the eye lands on. */
+.monitor-table tr.own,.trust-table tr.own{background:#eef1ee}
+.monitor-table tr.own td,.trust-table tr.own td{color:var(--muted)}
+.monitor-table tr.own td strong{font-weight:600}
+.own-tag{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#e2e6e2;color:var(--muted);font-size:.72rem;font-weight:700;vertical-align:middle}
 .panel{margin:0 0 16px;padding:clamp(20px,4vw,32px);background:var(--card);border:1px solid var(--line);border-radius:22px}
 .panel>summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;font-size:1.25rem;font-weight:800}
 .panel>summary::-webkit-details-marker{display:none}
@@ -198,6 +211,8 @@ export const MONITOR_CSS = /* css */ `
   .pill.bad{background:#3a1f1f}
   .pill.warn{background:#2b2418;color:#e7c98f}
   .pill.mute{background:#1b2b23}
+  .monitor-table tr.own,.trust-table tr.own{background:#161d19}
+  .own-tag{background:#243029}
 }
 `;
 
@@ -208,6 +223,8 @@ function clear(node){while(node.firstChild)node.firstChild.remove()}
 function when(ms){if(!ms)return'—';return new Date(ms).toLocaleString('zh-Hant-TW',{dateStyle:'short',timeStyle:'short'})}
 function ago(ms){if(!ms)return'';const d=Math.floor((Date.now()-ms)/86400000);return d<=0?'今天':d+' 天前'}
 function pill(label,kind){return text('span',label,'pill '+kind)}
+function markTier(row,data){if(data&&data.tier==='own')row.className='own';return row}
+function ownTag(data){return data&&data.tier==='own'?text('span','本專案','own-tag'):null}
 
 function sparkline(history){
   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
@@ -242,7 +259,9 @@ function renderApi(checks){
   rows.forEach(c=>{
     const tr=document.createElement('tr');
     const name=document.createElement('td');name.append(text('strong',c.label));
+    const tag=ownTag(c.data);if(tag)name.append(tag);
     if(c.data&&c.data.url)name.append(text('small',c.data.url));
+    markTier(tr,c.data);
     const op=text('td',(c.data&&c.data.operator)||'—');
     const st=document.createElement('td');st.append(pill(c.ok?'正常':'異常',c.ok?'ok':'bad'));
     const lat=text('td',c.latencyMs===undefined?'—':c.latencyMs+' ms');
@@ -290,13 +309,58 @@ function renderTrust(trust){
   setCell('cell-trust',trust.registryError?'warn':'ok',trust.total+' 個登記 DID');
 }
 
+function shortDid(did){return did.length>44?did.slice(0,22)+'…'+did.slice(-10):did}
+function renderTrustList(data){
+  const self=$('trust-self');clear(self);
+  if(data.self){
+    const box=document.createElement('div');box.className='self-entry'+(data.self.onOfficialList?' on-list':'');
+    box.append(text('span',data.self.onOfficialList?'在官方清單':'不在官方清單','badge'));
+    const block=document.createElement('div');
+    block.append(text('h3','本站 · '+data.self.host));
+    block.append(text('p',data.self.onOfficialList?'官方 DID API 回傳了這筆啟用中的紀錄。':'官方 DID API 對本站 did:key 的回答：'+((data.self.officialVerdict&&data.self.officialVerdict.reason)||'不在清單')+'。這是預期結果：本站是沙盒發行者。'));
+    block.append(text('code',data.self.didKey));box.append(block);self.append(box);
+  }
+  const accepted=$('trust-accepted');clear(accepted);
+  ((data.self&&data.self.acceptedBy)||[]).forEach(item=>{
+    const node=document.createElement('div');
+    node.append(text('span',item.accepts?'✓':'×','mark '+(item.accepts?'yes':'no')));
+    const info=document.createElement('div');info.append(text('strong',item.party),text('small',item.why));
+    node.append(info);accepted.append(node);
+  });
+  const body=$('trust-table').tBodies[0];clear(body);
+  (data.entries||[]).forEach(entry=>{
+    const tr=document.createElement('tr');
+    const name=document.createElement('td');name.append(text('strong',entry.name));
+    if(entry.nameEnglish)name.append(text('small',entry.nameEnglish));
+    if(entry.taxId)name.append(text('small','統編／代號 '+entry.taxId));
+    const roles=document.createElement('td');
+    (entry.orgTypes||[]).forEach(t=>roles.append(text('span',t===1?'發行':'查驗','role'+(t===2?' verifier':''))));
+    const hosts=document.createElement('td');(entry.hosts||[]).forEach(h=>hosts.append(text('small',h)));
+    const did=document.createElement('td');did.className='did';did.title=entry.did;did.textContent=shortDid(entry.did);
+    const chain=text('td',entry.onChain?'有':'無');if(entry.network)chain.append(text('small',entry.network));
+    tr.append(name,roles,hosts,did,chain);body.append(tr);
+  });
+  $('trust-meta').textContent='官方清單共 '+((data.entries||[]).length)+' 個 DID（去重後），來源 '+data.registry+'，讀取 '+data.pagesFetched+' 頁，時間 '+when(Date.parse(data.fetchedAt))+(data.error?'；讀取中斷：'+data.error:'')+'。DID 只顯示頭尾，滑鼠移上可見全文。';
+}
+async function loadTrustList(){
+  try{
+    const response=await fetch('/api/trust-list',{headers:{accept:'application/json'}});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    renderTrustList(await response.json());
+  }catch(error){
+    $('trust-meta').textContent='無法讀取官方信任清單：'+(error&&error.message?error.message:'未知錯誤');
+  }
+}
+
 function renderStatus(checks){
   const rows=checks.filter(c=>c.category==='status-list');
   const body=$('table-status').tBodies[0];clear(body);
   if(!rows.length){const tr=document.createElement('tr');const td=text('td','尚無資料','loading');td.colSpan=7;tr.append(td);body.append(tr);return}
   rows.forEach(c=>{
-    const d=c.data||{};const tr=document.createElement('tr');
-    const name=document.createElement('td');name.append(text('strong',c.label));if(d.url)name.append(text('small',d.url));
+    const d=c.data||{};const tr=document.createElement('tr');markTier(tr,d);
+    const name=document.createElement('td');name.append(text('strong',c.label));
+    const tag=ownTag(d);if(tag)name.append(tag);
+    if(d.url)name.append(text('small',d.url));
     const fmt=d.format==='statuslist2021'?'StatusList2021':d.format==='token-status-list'?'Token Status List':'—';
     const key=document.createElement('td');
     if(d.keyInIssuerDid===true)key.append(pill('是','ok'));
@@ -337,9 +401,10 @@ function renderRepos(checks){
   const body=$('table-repo').tBodies[0];clear(body);
   if(!rows.length){const tr=document.createElement('tr');const td=text('td','尚無資料','loading');td.colSpan=6;tr.append(td);body.append(tr);return}
   rows.forEach(c=>{
-    const d=c.data||{};const tr=document.createElement('tr');
+    const d=c.data||{};const tr=document.createElement('tr');markTier(tr,d);
     const name=document.createElement('td');
     if(d.url){const a=document.createElement('a');a.href=d.url;a.textContent=c.label;name.append(a)}else name.append(text('strong',c.label));
+    const tag=ownTag(d);if(tag)name.append(tag);
     if(d.owner)name.append(text('small',d.owner+'/'+d.repo));
     const st=document.createElement('td');st.append(pill(c.ok?'已讀取':'讀取失敗',c.ok?'ok':'bad'));
     tr.append(name,text('td',d.pushedAt?ago(d.pushedAt)+'（'+when(d.pushedAt)+'）':'—'),
@@ -403,4 +468,5 @@ $('refresh').onclick=async()=>{
 };
 
 load();
+loadTrustList();
 `;
