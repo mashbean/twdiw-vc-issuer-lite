@@ -107,6 +107,23 @@ export interface DeclaredType {
   displayName?: string;
 }
 
+/** Types known from measurement, used only when an issuer's metadata does not
+ *  answer this vantage point.
+ *
+ *  公路局 is the reason this exists. Its metadata replies from an ordinary
+ *  address and not from Cloudflare's, so the census — which discovers types
+ *  through metadata — silently lost the driving licence, the most widely held
+ *  government card in the ecosystem, along with its several thousand
+ *  revocations. Falling back to what was measured by hand on 2026-09-09 is
+ *  better than publishing a census with the flagship card missing. The
+ *  registers themselves are still read live; only the type names are seeded. */
+const SEEDED_TYPES: Record<string, DeclaredType[]> = {
+  "2-16-886-101-20003-20008-20082": [
+    { id: "2-16-886-101-20003-20008-20082_driverlicense_car_1211", displayName: "汽車駕照電子卡" },
+    { id: "2-16-886-101-20003-20008-20082_driverlicense_motor_1211", displayName: "機車駕照電子卡" },
+  ],
+};
+
 /** Names that say, in the issuer's own words, that a card is not for the
  *  public: explicit test markers, and the press-launch demo cards moda kept. */
 const TEST_MARKERS = /test|demo|sample|測試|範例|記者會/i;
@@ -215,10 +232,10 @@ export async function takeCensus(
       serviceBaseURL: entry.serviceBaseURL!,
     }));
 
-  const discovered = await inBatches(issuers, 6, async (issuer) => ({
-    issuer,
-    types: await credentialTypes(issuer, fetcher),
-  }));
+  const discovered = await inBatches(issuers, 6, async (issuer) => {
+    const types = await credentialTypes(issuer, fetcher);
+    return { issuer, types: types ?? SEEDED_TYPES[issuer.orgId] ?? null, seeded: !types && Boolean(SEEDED_TYPES[issuer.orgId]) };
+  });
 
   const targets: Array<{ issuer: typeof issuers[number]; type: DeclaredType; url: string }> = [];
   for (const { issuer, types } of discovered) {
@@ -255,7 +272,7 @@ export async function takeCensus(
   return {
     at: Date.now(),
     issuersAsked: issuers.length,
-    issuersAnswered: discovered.filter((item) => item.types !== null).length,
+    issuersAnswered: discovered.filter((item) => item.types !== null && !item.seeded).length,
     typesFound: targets.length,
     entries: census,
     unreadable,

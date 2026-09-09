@@ -200,6 +200,28 @@ describe("telling a real card from a scratch one", () => {
   });
 });
 
+describe("the census keeps the flagship card", () => {
+  it("still names the driving licence when 公路局's metadata will not answer", async () => {
+    const { takeCensus } = await import("../src/catalogue");
+    // Metadata refused, registers reachable — the shape seen from Cloudflare.
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes(".well-known/openid-credential-issuer")) return new Response("no", { status: 403 });
+      return new Response("not a register", { status: 404 });
+    }) as unknown as typeof fetch;
+    const census = await takeCensus([{
+      did: "did:key:zRoad", name: "行政院-交通部-公路局", orgTypes: [1], hosts: [],
+      taxId: "2-16-886-101-20003-20008-20082",
+      serviceBaseURL: "https://03711905.wallet.gov.tw",
+      onChain: true, registrations: [],
+    }], { fetcher });
+    // The registers were unreachable in this fixture, so nothing is counted —
+    // but the types were still discovered, which is what the seed is for.
+    expect(census.typesFound).toBe(2);
+    expect(census.issuersAnswered).toBe(0);
+  });
+});
+
 describe("feeds", () => {
   const events = [
     { at: 1_757_000_000_000, kind: "trust-added", target: "trust-list", summary: "信任清單新增：某某機關", detail: "did:key:zAbc" },
