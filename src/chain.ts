@@ -271,6 +271,9 @@ export interface ChainScan {
   blockNumber?: string;
   /** Which provider actually answered, so a silent failover is visible. */
   rpcEndpoint?: string;
+  /** What each provider said, by hostname, so a misconfigured keyed endpoint is
+   *  diagnosable without exposing the key. */
+  rpcTrail?: string[];
 }
 
 const RANK: Record<ChainVerdict, number> = { mismatch: 3, unavailable: 2, verified: 1, notAnchored: 0 };
@@ -306,9 +309,12 @@ async function callRPC(
   body: unknown,
   fetcher: typeof fetch,
   retryScale: number,
+  trail?: string[],
 ): Promise<{ json: unknown; endpoint: string }> {
+  const wantsArray = Array.isArray(body);
   let lastError = "";
   for (const endpoint of endpoints) {
+    const host = hostOf(endpoint);
     for (const backoff of BACKOFF_MS) {
       if (backoff) await sleep(backoff * retryScale);
       try {
@@ -319,20 +325,43 @@ async function callRPC(
           signal: AbortSignal.timeout(20_000),
         });
         if (response.status === 429 || response.status >= 500) {
-          lastError = `RPC ${response.status}`;
+          lastError = `${host} 回應 ${response.status}`;
+          trail?.push(lastError);
           continue;
         }
         if (!response.ok) {
-          lastError = `RPC ${response.status}`;
+          lastError = `${host} 回應 ${response.status}`;
+          trail?.push(lastError);
           break;
         }
-        return { json: await response.json(), endpoint };
+        const json = await response.json();
+        // Not every provider implements JSON-RPC batching: 1rpc.io answers a
+        // batch with a single object, which is a capability gap rather than an
+        // outage, so move to the next provider instead of failing the scan.
+        if (wantsArray && !Array.isArray(json)) {
+          lastError = `${host} 不支援批次查詢`;
+          trail?.push(lastError);
+          break;
+        }
+        trail?.push(`${host} 成功`);
+        return { json, endpoint };
       } catch (error) {
-        lastError = error instanceof Error ? error.message : "RPC 失敗";
+        lastError = `${host}：${error instanceof Error ? error.message : "失敗"}`;
+        trail?.push(lastError);
       }
     }
   }
   throw new Error(lastError || "RPC 無法連線");
+}
+
+/** Hostname only. A configured endpoint may carry an API key in its path, and
+ *  that must never reach a log, a snapshot or a page. */
+function hostOf(endpoint: string): string {
+  try {
+    return new URL(endpoint).hostname;
+  } catch {
+    return "（無法解析的端點）";
+  }
 }
 
 export async function scanChain(
@@ -370,11 +399,12 @@ export async function scanChain(
   }
 
   let rpcEndpoint: string | undefined;
+  const rpcTrail: string[] = [];
   try {
     // One block-number call proves the provider is live even when every
     // registration turns out to be unanchored.
     const head = await callRPC(
-      endpoints, { jsonrpc: "2.0", id: 0, method: "eth_blockNumber", params: [] }, fetcher, retryScale,
+      endpoints, { jsonrpc: "2.0", id: 0, method: "eth_blockNumber", params: [] }, fetcher, retryScale, rpcTrail,
     );
     rpcEndpoint = head.endpoint;
     const parsed = head.json as { result?: unknown };
@@ -393,7 +423,7 @@ export async function scanChain(
       // whole registry. The full list still follows as fallback.
       const rotation = offset / DIDS_PER_BATCH % endpoints.length;
       const ordered = [...endpoints.slice(rotation), ...endpoints.slice(0, rotation)];
-      const answer = await callRPC(ordered, calls, fetcher, retryScale);
+      const answer = await callRPC(ordered, calls, fetcher, retryScale, rpcTrail);
       rpcEndpoint = answer.endpoint;
       const replies = answer.json as Array<Record<string, unknown>>;
       if (!Array.isArray(replies)) throw new Error("RPC 回應不是批次陣列");
@@ -425,7 +455,11 @@ export async function scanChain(
       rpcError: error instanceof Error ? error.message : "RPC 失敗",
       blockNumber,
       rpcEndpoint,
+      rpcTrail: [...new Set(rpcTrail)].slice(0, 8),
     };
   }
-  return { byDid, rpcOk: true, rpcLatencyMs: Date.now() - started, blockNumber, rpcEndpoint };
+  return {
+    byDid, rpcOk: true, rpcLatencyMs: Date.now() - started, blockNumber, rpcEndpoint,
+    rpcTrail: [...new Set(rpcTrail)].slice(0, 8),
+  };
 }

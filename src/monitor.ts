@@ -76,6 +76,7 @@ export interface DashboardPayload {
     rpcOk: boolean;
     rpcError?: string;
     rpcEndpoint?: string;
+    rpcTrail?: string[];
     problems: Array<{ did: string; name?: string; verdict: ChainVerdict; reason?: string }>;
   };
   census?: {
@@ -472,6 +473,7 @@ export class MonitorState extends DurableObject<Env> {
       // Host only. The configured endpoint may carry an API key in its path and
       // that must never reach a page or a stored snapshot.
       rpcEndpoint: scan.rpcEndpoint ? safeHost(scan.rpcEndpoint) : undefined,
+      rpcTrail: scan.rpcTrail,
     });
   }
 
@@ -545,7 +547,7 @@ export class MonitorState extends DurableObject<Env> {
     const chain = this.snapshot<{
       counts: Record<ChainVerdict, number>;
       problems: Array<{ did: string; name?: string; verdict: ChainVerdict; reason?: string }>;
-      blockNumber?: string; rpcOk: boolean; rpcError?: string; rpcEndpoint?: string;
+      blockNumber?: string; rpcOk: boolean; rpcError?: string; rpcEndpoint?: string; rpcTrail?: string[];
     }>("chain");
     const chainAt = Number(sql.exec("SELECT at FROM snapshots WHERE target = 'chain'").toArray()[0]?.at ?? 0);
 
@@ -569,6 +571,7 @@ export class MonitorState extends DurableObject<Env> {
         rpcOk: chain.rpcOk,
         rpcError: chain.rpcError,
         rpcEndpoint: chain.rpcEndpoint,
+        rpcTrail: chain.rpcTrail,
         problems: chain.problems ?? [],
       } : undefined,
       events,
