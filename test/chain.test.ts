@@ -233,7 +233,7 @@ describe("scanning the whole registry", () => {
         };
       });
     });
-    const scan = await scanChain([REGISTRATION], { fetcher, retryDelayMs: 0 });
+    const scan = await scanChain([REGISTRATION], { fetcher, retryScale: 0 });
     expect(scan.rpcOk).toBe(true);
     expect(scan.blockNumber).toBe("0x99");
     expect(scan.byDid.get(REGISTRATION.did)?.verdict).toBe("verified");
@@ -241,14 +241,14 @@ describe("scanning the whole registry", () => {
 
   it("marks a registration with no anchor as notAnchored without calling the chain", async () => {
     const fetcher = vi.fn() as unknown as typeof fetch;
-    const scan = await scanChain([{ ...REGISTRATION, onChainRecords: [] }], { fetcher, retryDelayMs: 0 });
+    const scan = await scanChain([{ ...REGISTRATION, onChainRecords: [] }], { fetcher, retryScale: 0 });
     expect(scan.byDid.get(REGISTRATION.did)?.verdict).toBe("notAnchored");
     expect(fetcher).not.toHaveBeenCalled();
   });
 
   it("reports unavailable, never verified, when the RPC cannot be reached", async () => {
     const fetcher = vi.fn(async () => { throw new Error("boom"); }) as unknown as typeof fetch;
-    const scan = await scanChain([REGISTRATION], { fetcher, retryDelayMs: 0 });
+    const scan = await scanChain([REGISTRATION], { fetcher, retryScale: 0 });
     expect(scan.rpcOk).toBe(false);
     expect(scan.byDid.get(REGISTRATION.did)?.verdict).toBe("unavailable");
   });
@@ -262,7 +262,7 @@ describe("scanning the whole registry", () => {
         return { id: call.id, result: RECEIPT };
       });
     });
-    const scan = await scanChain([REGISTRATION], { fetcher, retryDelayMs: 0 });
+    const scan = await scanChain([REGISTRATION], { fetcher, retryScale: 0 });
     const check = scan.byDid.get(REGISTRATION.did);
     expect(check?.verdict).toBe("mismatch");
     expect(check?.reason).toMatch(/現況/);
@@ -287,7 +287,7 @@ describe("scanning the whole registry", () => {
     });
     // The second registration claims orgType 2 while the chain says 1, so the
     // DID must surface as a mismatch even though its sibling verified.
-    const scan = await scanChain([REGISTRATION, second], { fetcher, retryDelayMs: 0 });
+    const scan = await scanChain([REGISTRATION, second], { fetcher, retryScale: 0 });
     expect(scan.byDid.get(REGISTRATION.did)?.verdict).toBe("mismatch");
   });
 });

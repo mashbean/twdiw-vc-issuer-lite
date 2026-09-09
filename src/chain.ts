@@ -11,15 +11,20 @@
 // Ported from the Swift original, decoding rules and all. The two selectors and
 // the contract address are the measured production values.
 
-/** Public Arbitrum endpoints, tried in order. One endpoint is not enough: these
- *  requests leave from Cloudflare's shared egress addresses, which the busiest
- *  public RPC rate-limits (a 429 was the first thing this monitor met in
- *  production), so a second and third provider turn a daily outage into a
- *  retry. */
+/** Public Arbitrum endpoints, in preference order.
+ *
+ *  Measured 2026-09-09, and the order matters more than the length. The
+ *  official endpoint answers everything this monitor asks; the free tiers of
+ *  the alternatives do not — `arbitrum-one-rpc.publicnode.com` refuses
+ *  `eth_getTransactionByHash` on an old block as an "archive request" needing a
+ *  paid token, and `arbitrum.llamarpc.com` was unreachable. Rotating away from
+ *  the official endpoint at the first 429 therefore made things worse: every
+ *  DID came back unavailable from a provider that could not serve the query at
+ *  all. So the policy is to wait for the good endpoint rather than run to a bad
+ *  one, and only fall back once it is genuinely exhausted. */
 export const ARBITRUM_RPCS = [
   "https://arb1.arbitrum.io/rpc",
   "https://arbitrum-one-rpc.publicnode.com",
-  "https://arbitrum.llamarpc.com",
 ];
 export const ARBITRUM_RPC = ARBITRUM_RPCS[0]!;
 export const REGISTRY_CONTRACT = "0x84172caf8dd126c76f1fa8a2733ca3233264d31f";
@@ -267,24 +272,33 @@ export interface ChainScan {
 const RANK: Record<ChainVerdict, number> = { mismatch: 3, unavailable: 2, verified: 1, notAnchored: 0 };
 /** DIDs per JSON-RPC batch. Each one costs three calls, and a public endpoint
  *  is happier with several modest batches than one enormous array. */
-const DIDS_PER_BATCH = 6;
+/** DIDs per JSON-RPC batch. Larger batches mean fewer HTTP requests, and the
+ *  rate limiter counts requests: the official endpoint happily answers a
+ *  36-call array, so four fat batches beat seven thin ones. */
+const DIDS_PER_BATCH = 12;
 /** A pause between batches. This runs once a day, so spending a few seconds
  *  being a polite client costs nothing and avoids the rate limiter. */
-const BATCH_PAUSE_MS = 300;
+const BATCH_PAUSE_MS = 800;
+/** Waits before re-trying the same endpoint, in order. */
+const BACKOFF_MS = [0, 1_000, 3_000];
 
 const sleep = (ms: number) => (ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve());
 
-/** POSTs to the first endpoint that answers, rotating on rate limits and server
- *  errors, then retrying the whole rotation once after a pause. */
+/** POSTs to the best endpoint that will answer.
+ *
+ *  Each endpoint gets its own backoff ladder before the next is tried, because
+ *  the preferred endpoint being briefly rate-limited is a much better problem
+ *  than the fallback being permanently unable to serve archive queries. */
 async function callRPC(
   endpoints: string[],
   body: unknown,
   fetcher: typeof fetch,
-  retryDelayMs: number,
+  retryScale: number,
 ): Promise<{ json: unknown; endpoint: string }> {
   let lastError = "";
-  for (let round = 0; round < 2; round += 1) {
-    for (const endpoint of endpoints) {
+  for (const endpoint of endpoints) {
+    for (const backoff of BACKOFF_MS) {
+      if (backoff) await sleep(backoff * retryScale);
       try {
         const response = await fetcher(endpoint, {
           method: "POST",
@@ -292,27 +306,30 @@ async function callRPC(
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(20_000),
         });
-        if (!response.ok) {
+        if (response.status === 429 || response.status >= 500) {
           lastError = `RPC ${response.status}`;
           continue;
+        }
+        if (!response.ok) {
+          lastError = `RPC ${response.status}`;
+          break;
         }
         return { json: await response.json(), endpoint };
       } catch (error) {
         lastError = error instanceof Error ? error.message : "RPC 失敗";
       }
     }
-    if (round === 0) await sleep(retryDelayMs);
   }
   throw new Error(lastError || "RPC 無法連線");
 }
 
 export async function scanChain(
   registrations: Registration[],
-  options: { rpcURLs?: string[]; fetcher?: typeof fetch; retryDelayMs?: number } = {},
+  options: { rpcURLs?: string[]; fetcher?: typeof fetch; retryScale?: number } = {},
 ): Promise<ChainScan> {
   const endpoints = options.rpcURLs ?? ARBITRUM_RPCS;
   const fetcher = options.fetcher ?? fetch;
-  const retryDelayMs = options.retryDelayMs ?? 1_500;
+  const retryScale = options.retryScale ?? 1;
   const byDid = new Map<string, RegistrationCheck>();
   const record = (check: RegistrationCheck) => {
     const existing = byDid.get(check.did);
@@ -345,7 +362,7 @@ export async function scanChain(
     // One block-number call proves the provider is live even when every
     // registration turns out to be unanchored.
     const head = await callRPC(
-      endpoints, { jsonrpc: "2.0", id: 0, method: "eth_blockNumber", params: [] }, fetcher, retryDelayMs,
+      endpoints, { jsonrpc: "2.0", id: 0, method: "eth_blockNumber", params: [] }, fetcher, retryScale,
     );
     rpcEndpoint = head.endpoint;
     const parsed = head.json as { result?: unknown };
@@ -360,7 +377,7 @@ export async function scanChain(
           params: [{ to: REGISTRY_CONTRACT, data: item.callData }, "latest"] },
       ]);
       if (offset > 0) await sleep(BATCH_PAUSE_MS);
-      const answer = await callRPC(endpoints, calls, fetcher, retryDelayMs);
+      const answer = await callRPC(endpoints, calls, fetcher, retryScale);
       rpcEndpoint = answer.endpoint;
       const replies = answer.json as Array<Record<string, unknown>>;
       if (!Array.isArray(replies)) throw new Error("RPC 回應不是批次陣列");
