@@ -268,6 +268,8 @@ describe("the dashboard page", () => {
     expect(official).not.toContain('id="trust-self"');
     expect(official).not.toContain('id="trust-accepted"');
     expect(official).not.toContain("有備而來");
+    // Nor any other way of talking about this site inside the official panel.
+    expect(MONITOR_JS).not.toContain("'本站自身：'");
   });
 
   it("reads its data from the same origin and never polls", () => {

@@ -378,12 +378,6 @@ function renderTrust(trust){
   const cells=[['登記 DID 總數',trust.total],['發行者',trust.issuers],['驗證者',trust.verifiers],['兼具兩種角色',trust.both],['宣稱已上鏈',trust.withAnchorClaim]];
   cells.forEach(([label,value])=>{const d=document.createElement('div');d.append(text('strong',String(value)),text('small',label));grid.append(d)});
   host.append(grid);
-  if(trust.self){
-    const p=document.createElement('p');p.className='panel-note';
-    p.append(text('span','本站自身：'),pill(trust.self.onOfficialList?'在官方清單':'不在官方清單',trust.self.onOfficialList?'ok':'mute'),
-      text('span',' '+(trust.self.onOfficialList?'':'（沙盒發行者，這是預期結果）')));
-    host.append(p);
-  }
   if(trust.registryError)host.append(text('p','讀取時發生問題：'+trust.registryError,'panel-note'));
   host.append(text('p','掃描時間 '+when(trust.at),'panel-note'));
   setCell('cell-trust',trust.registryError?'warn':'ok',trust.total+' 個登記 DID');
