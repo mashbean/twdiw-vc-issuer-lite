@@ -213,7 +213,7 @@ describe("the dashboard page", () => {
       "last-scan", "schedule", "refresh", "refresh-note", "load-error",
       "cell-api", "cell-e2e", "cell-trust", "cell-status", "cell-chain", "cell-repo",
       "table-api", "e2e-body", "trust-body", "trust-self", "trust-accepted", "trust-table", "trust-meta",
-      "census-summary", "table-census", "census-meta",
+      "census-summary", "table-census", "census-meta", "panel-own-trust",
       "table-status", "chain-body", "table-repo", "timeline",
       "cell-own-api", "cell-own-repo", "table-own-api", "table-own-repo",
     ]) {
@@ -261,6 +261,13 @@ describe("the dashboard page", () => {
     // The official tables must never carry an own-tier row, and vice versa.
     expect(MONITOR_JS).toContain("c.data.tier!=='own'");
     expect(MONITOR_JS).toContain("c.data.tier==='own'");
+    // The official trust-list panel carries the register and nothing about this
+    // project: the self-assessment lives in the own block.
+    const official = MONITOR_HTML.slice(MONITOR_HTML.indexOf('class="official-block"'), MONITOR_HTML.indexOf('class="own-block"'));
+    expect(official).toContain('id="trust-table"');
+    expect(official).not.toContain('id="trust-self"');
+    expect(official).not.toContain('id="trust-accepted"');
+    expect(official).not.toContain("有備而來");
   });
 
   it("reads its data from the same origin and never polls", () => {

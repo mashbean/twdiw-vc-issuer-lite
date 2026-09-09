@@ -72,10 +72,8 @@ export const MONITOR_HTML = /* html */ `<!doctype html>
 
     <details class="panel" id="panel-trust">
       <summary>官方信任清單</summary>
-      <p class="panel-note">數位發展部登記的發行者與驗證者，完整清單就在這裡。表格即時讀取官方 API；本站的自評列在最上方，誠實標示它不在清單上、又被誰接受。</p>
+      <p class="panel-note">數位發展部登記的發行者與驗證者，完整清單就在這裡，即時讀取官方 API。</p>
       <div id="trust-body"><p class="loading">載入中…</p></div>
-      <div id="trust-self"></div>
-      <div id="trust-accepted" class="accepted-by"></div>
       <div class="table-wrap"><table class="trust-table" id="trust-table">
         <thead><tr><th>機構</th><th>角色</th><th>登記端點</th><th>DID</th><th>鏈上紀錄</th></tr></thead>
         <tbody><tr><td colspan="5" class="loading">載入中…</td></tr></tbody>
@@ -128,6 +126,13 @@ export const MONITOR_HTML = /* html */ `<!doctype html>
         <summary>發卡端到端自檢</summary>
         <p class="panel-note">每天由 Worker 自己扮演一次皮夾：建立 offer、取回 offer 物件、讀 metadata、換 token、以 <code>openid4vci-proof+jwt</code> 領卡，再依查驗端的規則驗證這張卡。單點 ping 看不出發卡是否還能成功，這條可以。</p>
         <div id="e2e-body" class="e2e-body"><p class="loading">載入中…</p></div>
+      </details>
+
+      <details class="panel" id="panel-own-trust">
+        <summary>本站在官方信任清單上的位置</summary>
+        <p class="panel-note">本站是沙盒發行者，不在官方信任清單上——這是刻意的，也是這個專案誠實的前提。下面是官方 DID API 對本站 did:key 的實際回答，以及誰會、誰不會收下本站發的卡。</p>
+        <div id="trust-self"></div>
+        <div id="trust-accepted" class="accepted-by"></div>
       </details>
 
       <details class="panel" id="panel-own">
