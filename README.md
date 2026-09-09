@@ -72,7 +72,7 @@ QR   openid-credential-offer://?credential_offer_uri=https://issuer.example/api/
 | 信任清單 | 登記 DID 總數與角色分布，以及誰加入、離開、更名、換端點 |
 | 撤銷清單 | 已知網址的清單位元圖、已撤銷張數，以及簽章金鑰是否就在發行者的 `did:key` 內 |
 | 區塊鏈 | 不相信 API 的上鏈宣稱：抓它指名的 Arbitrum 交易比對內容，再查合約的**現況**紀錄，避免舊登錄被回放 |
-| 原始碼 | 五個相關 repo 的最後更新、開放 issue 與授權（活躍度，不是健康度） |
+| 原始碼 | 官方皮夾 App 與本專案四個 repo 的最後更新、開放 issue 與授權（活躍度，不是健康度） |
 
 變更會寫進時間軸，並以 [JSON Feed](https://issuer.mashbean.net/monitor/feed.json) 與 [Atom](https://issuer.mashbean.net/monitor/feed.xml) 發布，只推變化、不推「今天一切正常」。
 
