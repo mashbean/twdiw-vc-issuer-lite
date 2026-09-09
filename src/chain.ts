@@ -13,17 +13,21 @@
 
 /** Public Arbitrum endpoints, in preference order.
  *
- *  Measured 2026-09-09, and the order matters more than the length. The
- *  official endpoint answers everything this monitor asks; the free tiers of
- *  the alternatives do not — `arbitrum-one-rpc.publicnode.com` refuses
- *  `eth_getTransactionByHash` on an old block as an "archive request" needing a
- *  paid token, and `arbitrum.llamarpc.com` was unreachable. Rotating away from
- *  the official endpoint at the first 429 therefore made things worse: every
- *  DID came back unavailable from a provider that could not serve the query at
- *  all. So the policy is to wait for the good endpoint rather than run to a bad
- *  one, and only fall back once it is genuinely exhausted. */
+ *  Measured 2026-09-09: all four serve both calls this monitor makes, the
+ *  transaction lookup included. Two that did not are deliberately absent —
+ *  `rpc.ankr.com/arbitrum` now demands authentication and
+ *  `arbitrum.blockpi.network` answered 521.
+ *
+ *  Order and policy both matter. Requests leave from Cloudflare's shared egress
+ *  addresses, which the official endpoint rate-limits hard: an early version
+ *  rotated away on the first 429, landed on a provider that refused the archive
+ *  query, and reported every DID as unavailable. So each endpoint is retried on
+ *  its own backoff ladder before the next is tried, and there are enough of them
+ *  that a throttled morning is not a blank panel. */
 export const ARBITRUM_RPCS = [
   "https://arb1.arbitrum.io/rpc",
+  "https://1rpc.io/arb",
+  "https://arbitrum-one.public.blastapi.io",
   "https://arbitrum-one-rpc.publicnode.com",
 ];
 export const ARBITRUM_RPC = ARBITRUM_RPCS[0]!;
