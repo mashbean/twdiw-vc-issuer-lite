@@ -85,7 +85,14 @@ export const MONITOR_HTML = /* html */ `<!doctype html>
 
     <details class="panel" id="panel-status">
       <summary>撤銷清單</summary>
-      <p class="panel-note">撤銷清單的網址只存在於已簽發的卡片裡，所以這裡只能監測「知道網址的清單」，不是整個生態系的撤銷全貌。另外持續追蹤一件事：清單的簽章金鑰是否就在發行者自己的 <code>did:key</code> 內——對離線皮夾而言，那是撤銷資訊唯一可自證的信任錨。</p>
+      <p class="panel-note">撤銷清單的網址只寫在已簽發的卡片裡（<code>vc.credentialStatus.statusListCredential</code>），沒有任何地方公告它們。這一區把它公告出來：每天走一次官方信任清單，向每個發行者索取它的 OID4VCI metadata 取得卡種，再逐一讀出每個卡種背後的撤銷清單並清點。持續追蹤的一件事是簽章金鑰是否就在發行者自己的 <code>did:key</code> 內——對離線皮夾而言，那是撤銷資訊唯一可自證的信任錨。</p>
+      <div id="census-summary" class="count-grid"></div>
+      <div class="table-wrap"><table class="monitor-table" id="table-census">
+        <thead><tr><th>發行者</th><th>卡種</th><th>已撤銷</th><th>清單容量</th><th>簽章金鑰在 DID 內</th></tr></thead>
+        <tbody><tr><td colspan="5" class="loading">載入中…</td></tr></tbody>
+      </table></div>
+      <p id="census-meta" class="trust-meta"></p>
+      <h3>本站自己的清單</h3>
       <div class="table-wrap"><table class="monitor-table" id="table-status">
         <thead><tr><th>清單</th><th>營運者</th><th>格式</th><th>位元總數</th><th>已撤銷</th><th>簽章金鑰在 DID 內</th><th>說明</th></tr></thead>
         <tbody><tr><td colspan="7" class="loading">載入中…</td></tr></tbody>
@@ -121,7 +128,7 @@ export const MONITOR_HTML = /* html */ `<!doctype html>
       <h2 id="boundaries-title">這個儀表板不宣稱什麼</h2>
       <ul>
         <li>它是從 Cloudflare 邊緣單點觀測。一個端點在這裡連不上，可能是它掛了，也可能是它擋了這個來源，頁面只寫「從邊緣無法取得」。</li>
-        <li>撤銷清單只涵蓋已知網址的清單，不是全生態系的撤銷狀況。</li>
+        <li>撤銷清單普查涵蓋官方信任清單上「有回應 metadata 的發行者」所宣告的卡種；沒有回應或路徑不同的發行者不在其中，頁面會列出未計入的數量。</li>
         <li>Worker 看不到 TLS 憑證細節，所以沒有憑證到期監測。</li>
         <li>每天掃一次，資料最舊可能是 24 小時前的。每格都標了那次掃描的時間。</li>
         <li>本站是沙盒發行者，不在官方信任清單上，也不代表數位發展部或任何機關。</li>
@@ -372,7 +379,28 @@ function renderStatus(checks){
     body.append(tr);
   });
   const bad=rows.filter(c=>!c.ok).length;
-  setCell('cell-status',bad?'bad':'ok',bad?bad+' / '+rows.length+' 份無法讀取':rows.length+' 份可讀取');
+  const census=window.__census;
+  setCell('cell-status',bad?'warn':'ok',
+    census?census.entries.length+' 份清單 · 共 '+census.totalRevoked.toLocaleString()+' 張撤銷'
+          :(bad?bad+' / '+rows.length+' 份無法讀取':rows.length+' 份可讀取'));
+}
+
+function renderCensus(census){
+  const summary=$('census-summary');clear(summary);
+  const body=$('table-census').tBodies[0];clear(body);
+  if(!census){const tr=document.createElement('tr');const td=text('td','尚未普查','loading');td.colSpan=5;tr.append(td);body.append(tr);return}
+  [['已撤銷卡片總數',census.totalRevoked],['撤銷清單份數',census.entries.length],['卡種總數',census.typesFound],['回應的發行者',census.issuersAnswered+' / '+census.issuersAsked]]
+    .forEach(([label,value])=>{const d=document.createElement('div');d.append(text('strong',String(value)),text('small',label));summary.append(d)});
+  census.entries.forEach(e=>{
+    const tr=document.createElement('tr');
+    const issuer=document.createElement('td');issuer.append(text('strong',e.issuer));issuer.append(text('small',e.issuerId));
+    const type=document.createElement('td');const a=document.createElement('a');a.href=e.url;a.textContent=e.credentialType;a.rel='noreferrer';type.append(a);
+    const revoked=text('td',e.revoked.toLocaleString());if(e.revoked>0)revoked.style.fontWeight='800';
+    const key=document.createElement('td');
+    if(e.keyInIssuerDid)key.append(pill('是','ok'));else{key.append(pill('否','warn'));if(e.kid)key.append(text('small',e.kid))}
+    tr.append(issuer,type,revoked,text('td',e.totalBits.toLocaleString()),key);body.append(tr);
+  });
+  $('census-meta').textContent='普查時間 '+when(census.at)+(census.unreadable?'；有 '+census.unreadable+' 個卡種沒有可讀的撤銷清單（發行者未提供或路徑不同），未計入。':'。')+' 卡種連結即為該清單的實際網址。';
 }
 
 function renderChain(chain){
@@ -435,6 +463,8 @@ function render(data){
   renderApi(data.checks||[]);
   renderE2E(data.checks||[]);
   renderTrust(data.trust);
+  window.__census=data.census;
+  renderCensus(data.census);
   renderStatus(data.checks||[]);
   renderChain(data.chain);
   renderRepos(data.checks||[]);

@@ -16,6 +16,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import { ARBITRUM_RPCS, scanChain, type ChainVerdict, type Registration } from "./chain";
+import { censusPayload, takeCensus, totalRevoked, type Census } from "./catalogue";
 import {
   WATCHED_REPOS,
   endpointTargets,
@@ -74,6 +75,19 @@ export interface DashboardPayload {
     blockNumber?: string;
     rpcOk: boolean;
     problems: Array<{ did: string; name?: string; verdict: ChainVerdict; reason?: string }>;
+  };
+  census?: {
+    at: number;
+    issuersAsked: number;
+    issuersAnswered: number;
+    typesFound: number;
+    unreadable: number;
+    totalRevoked: number;
+    entries: Array<{
+      issuer: string; issuerId: string; credentialType: string; url: string;
+      totalBits: number; revoked: number; kid?: string;
+      keyInIssuerDid: boolean; subjectMatchesUrl: boolean;
+    }>;
   };
   events: MonitorEvent[];
   runs: Array<{ at: number; ms: number; ok: number; failed: number }>;
@@ -226,6 +240,27 @@ export class MonitorState extends DurableObject<Env> {
 
     if (list) {
       this.diffTrustList(at, list.entries, list.error);
+
+      // The revocation census: every registered issuer's credential types and
+      // the register behind each one. This is the part of the ecosystem that is
+      // otherwise invisible — a status list URL is only published inside the
+      // credentials that point at it.
+      try {
+        const census = await takeCensus(list.entries);
+        this.diffCensus(at, census);
+        results.push({
+          target: "status-census", category: "status-list", label: "撤銷清單普查",
+          ok: census.entries.length > 0,
+          detail: `${census.issuersAnswered}/${census.issuersAsked} 個發行者、${census.entries.length} 份清單、共 ${totalRevoked(census)} 張已撤銷`,
+          data: { tier: "official", lists: census.entries.length, revoked: totalRevoked(census) },
+        });
+      } catch {
+        results.push({
+          target: "status-census", category: "status-list", label: "撤銷清單普查",
+          ok: false, detail: "普查未能完成", data: { tier: "official" },
+        });
+      }
+
       const registrations: Registration[] = list.entries.flatMap((entry) => entry.registrations);
       if (registrations.length) {
         // A keyed endpoint, when the operator has set one, goes first: the free
@@ -356,6 +391,46 @@ export class MonitorState extends DurableObject<Env> {
     });
   }
 
+  /** Revocation is the news here: a register whose count moved means cards were
+   *  revoked since yesterday, and that is worth publishing. A new or vanished
+   *  credential type is worth publishing too. */
+  private diffCensus(at: number, census: Census): void {
+    const previous = this.snapshot<{ entries: Array<{ url: string; revoked: number; credentialType: string; issuer: string }> }>("status-census");
+    if (previous?.entries) {
+      const before = new Map(previous.entries.map((entry) => [entry.url, entry]));
+      for (const entry of census.entries) {
+        const was = before.get(entry.url);
+        if (!was) {
+          this.addEvent({
+            at, kind: "register-added", target: "status-census",
+            summary: `新的卡種與撤銷清單：${entry.issuer}`,
+            detail: `${entry.credentialType}｜目前已撤銷 ${entry.revoked} 張`,
+          });
+          continue;
+        }
+        if (was.revoked !== entry.revoked) {
+          const delta = entry.revoked - was.revoked;
+          this.addEvent({
+            at, kind: "revocations-changed", target: "status-census",
+            summary: `${entry.issuer} 撤銷數 ${delta > 0 ? "+" : ""}${delta}（共 ${entry.revoked} 張）`,
+            detail: entry.credentialType,
+          });
+        }
+      }
+      const now = new Set(census.entries.map((entry) => entry.url));
+      for (const entry of previous.entries) {
+        if (!now.has(entry.url)) {
+          this.addEvent({
+            at, kind: "register-removed", target: "status-census",
+            summary: `卡種或撤銷清單消失：${entry.issuer}`,
+            detail: entry.credentialType,
+          });
+        }
+      }
+    }
+    this.putSnapshot("status-census", at, censusPayload(census));
+  }
+
   private recordChain(at: number, scan: Awaited<ReturnType<typeof scanChain>>, entries: TrustEntry[]): void {
     const names = new Map(entries.map((entry) => [entry.did, entry.name]));
     const counts: Record<ChainVerdict, number> = { verified: 0, mismatch: 0, notAnchored: 0, unavailable: 0 };
@@ -463,7 +538,10 @@ export class MonitorState extends DurableObject<Env> {
     }>("chain");
     const chainAt = Number(sql.exec("SELECT at FROM snapshots WHERE target = 'chain'").toArray()[0]?.at ?? 0);
 
+    const census = this.snapshot<DashboardPayload["census"]>("status-census");
+
     return {
+      census,
       lastRunAt: await this.lastRunAt(),
       lastRunMs: runs.at(-1)?.ms,
       running: false,

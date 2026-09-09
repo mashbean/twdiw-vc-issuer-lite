@@ -144,45 +144,11 @@ export function endpointTargets(selfOrigin: string): EndpointTarget[] {
   ];
 }
 
-/** Which status lists can be watched at all: only the ones whose URL is known.
- *  A status list URL lives inside an issued credential, so this is necessarily
- *  a partial view of revocation across the ecosystem, and the page says so.
- *
- *  These four are the production lists, found 2026-09-09 by taking each
- *  issuer's `serviceBaseURL` from the official trust list and following the
- *  path shape a real issued credential uses:
- *  `<serviceBaseURL>/vc/api/status-list/<credential type>/r0`. They are the
- *  live revocation registers for the cards people actually hold. */
+/** The only revocation register named by hand: this site's own. Every official
+ *  register is discovered instead — see `catalogue.ts`, which asks each
+ *  registered issuer what it issues and reads the register beside each type. */
 export function statusListTargets(selfOrigin: string): Array<{ id: string; label: string; url: string; operator: string; tier: Tier }> {
   return [
-    {
-      id: "status-driverlicense",
-      label: "駕照電子卡撤銷清單",
-      operator: "交通部公路局",
-      tier: "official",
-      url: "https://03711905.wallet.gov.tw/vc/api/status-list/2-16-886-101-20003-20008-20082_driverlicense_car_1211/r0",
-    },
-    {
-      id: "status-twm",
-      label: "台灣大哥大門號卡撤銷清單",
-      operator: "台灣大哥大",
-      tier: "official",
-      url: "https://97176270.wallet.gov.tw/vc/api/status-list/97176270_twmdiwvc_postpaid/r0",
-    },
-    {
-      id: "status-fet",
-      label: "遠傳門號卡撤銷清單",
-      operator: "遠傳電信",
-      tier: "official",
-      url: "https://97179430.wallet.gov.tw/vc/api/status-list/97179430_fet_vc_prod/r0",
-    },
-    {
-      id: "status-cht",
-      label: "中華電信門號卡撤銷清單",
-      operator: "中華電信",
-      tier: "official",
-      url: "https://chtmecard.wallet.gov.tw/vc/api/status-list/96979933_name_phonel5_phonel3/r0",
-    },
     {
       id: "status-self",
       label: "本站模擬卡撤銷清單",

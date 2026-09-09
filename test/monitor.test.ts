@@ -55,11 +55,12 @@ describe("what the monitor watches", () => {
     expect(self?.url.startsWith(ORIGIN)).toBe(true);
     // The production revocation registers come first; this site's own list is
     // the recessed one at the end.
+    // Official registers are discovered by the census, not named by hand; the
+    // only hand-written one is this site's own.
     const lists = statusListTargets(ORIGIN);
-    expect(lists.filter((list) => list.tier === "official").length).toBeGreaterThanOrEqual(4);
-    expect(lists.every((list) => list.tier !== "official" || list.url.includes(".wallet.gov.tw"))).toBe(true);
-    expect(lists.at(-1)?.url).toBe(`${ORIGIN}/status/1`);
-    expect(lists.some((list) => list.url.includes("issuer-oid4vci") || list.url.includes("demo"))).toBe(false);
+    expect(lists).toHaveLength(1);
+    expect(lists[0]?.url).toBe(`${ORIGIN}/status/1`);
+    expect(lists[0]?.tier).toBe("own");
     expect(WATCHED_REPOS.filter((repo) => repo.owner === "moda-gov-tw").length).toBeGreaterThanOrEqual(3);
     expect(WATCHED_REPOS.map((repo) => repo.repo)).toContain("TWDIW-official-app");
   });
@@ -212,6 +213,7 @@ describe("the dashboard page", () => {
       "last-scan", "schedule", "refresh", "refresh-note", "load-error",
       "cell-api", "cell-e2e", "cell-trust", "cell-status", "cell-chain", "cell-repo",
       "table-api", "e2e-body", "trust-body", "trust-self", "trust-accepted", "trust-table", "trust-meta",
+      "census-summary", "table-census", "census-meta",
       "table-status", "chain-body", "table-repo", "timeline",
     ]) {
       expect(MONITOR_HTML, id).toContain(`id="${id}"`);
@@ -230,7 +232,7 @@ describe("the dashboard page", () => {
 
   it("states the boundaries the data cannot cross", () => {
     expect(MONITOR_HTML).toContain("從 Cloudflare 邊緣單點觀測");
-    expect(MONITOR_HTML).toContain("撤銷清單只涵蓋已知網址的清單");
+    expect(MONITOR_HTML).toContain("沒有回應或路徑不同的發行者不在其中");
     expect(MONITOR_HTML).toContain("沒有憑證到期監測");
     expect(MONITOR_HTML).toContain("每天掃一次");
     expect(MONITOR_HTML).toContain("不在官方信任清單上");
@@ -240,6 +242,13 @@ describe("the dashboard page", () => {
     expect(MONITOR_JS).toContain("fetch('/api/trust-list'");
     expect(MONITOR_HTML).toContain("完整清單就在這裡");
     expect(MONITOR_HTML).not.toContain('href="/#trust"');
+  });
+
+  it("publishes the revocation census rather than a hand-picked sample", () => {
+    expect(MONITOR_HTML).toContain("沒有任何地方公告它們");
+    expect(MONITOR_HTML).toContain("vc.credentialStatus.statusListCredential");
+    expect(MONITOR_JS).toContain("renderCensus");
+    expect(MONITOR_JS).toContain("已撤銷卡片總數");
   });
 
   it("recesses this project's own services so the official ecosystem leads", () => {
