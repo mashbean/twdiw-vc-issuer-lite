@@ -278,16 +278,17 @@ const RANK: Record<ChainVerdict, number> = { mismatch: 3, unavailable: 2, verifi
  *  is happier with several modest batches than one enormous array. */
 /** DIDs per JSON-RPC batch, each costing three calls.
  *
- *  The rate limiter counts requests, not calls, and the official endpoint
- *  answered a 129-call array without complaint (measured 2026-09-09), so the
- *  whole registry fits in one or two requests. Going the other way — many small
- *  batches — is what got this monitor rate-limited into a half-empty result on
- *  its first two production runs. Forty keeps a batch at 120 calls, comfortably
- *  inside what was measured, with room for the registry to grow. */
-const DIDS_PER_BATCH = 40;
+ *  Both extremes were measured in production and both failed. Seven small
+ *  batches to one endpoint got throttled partway through; one fat 120-call
+ *  batch was thrown away whole, while a 9-call batch in the same run
+ *  succeeded. The limiter evidently counts calls rather than requests, so the
+ *  budget is spent by keeping each request small *and* spreading successive
+ *  batches across providers (see the round-robin below). Eighteen calls per
+ *  request, shared four ways, sits well inside every limit observed. */
+const DIDS_PER_BATCH = 6;
 /** A pause between batches. This runs once a day, so spending a few seconds
  *  being a polite client costs nothing and avoids the rate limiter. */
-const BATCH_PAUSE_MS = 1_500;
+const BATCH_PAUSE_MS = 1_000;
 /** Waits before re-trying the same endpoint, in order. Generous because a daily
  *  job has all the time in the world and the alternative — falling back to a
  *  provider that cannot serve archive queries — is worse than waiting. */
@@ -387,8 +388,12 @@ export async function scanChain(
         { jsonrpc: "2.0", id: index * 3 + 2, method: "eth_call",
           params: [{ to: REGISTRY_CONTRACT, data: item.callData }, "latest"] },
       ]);
-      if (offset > 0) await sleep(BATCH_PAUSE_MS);
-      const answer = await callRPC(endpoints, calls, fetcher, retryScale);
+      if (offset > 0) await sleep(BATCH_PAUSE_MS * retryScale);
+      // Start each batch at a different provider, so no single limiter sees the
+      // whole registry. The full list still follows as fallback.
+      const rotation = offset / DIDS_PER_BATCH % endpoints.length;
+      const ordered = [...endpoints.slice(rotation), ...endpoints.slice(0, rotation)];
+      const answer = await callRPC(ordered, calls, fetcher, retryScale);
       rpcEndpoint = answer.endpoint;
       const replies = answer.json as Array<Record<string, unknown>>;
       if (!Array.isArray(replies)) throw new Error("RPC 回應不是批次陣列");
