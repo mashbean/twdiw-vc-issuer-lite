@@ -474,6 +474,11 @@ function renderCensus(census){
     if(e.keyInIssuerDid)key.append(pill('是','ok'));else{key.append(pill('否','warn'));if(e.kid)key.append(text('small',e.kid))}
     tr.append(issuer,type,revoked,text('td',e.totalBits.toLocaleString()),key);body.append(tr);
   });
+  if(census.silentIssuers&&census.silentIssuers.length){
+    const p=document.createElement('p');p.className='panel-note';
+    p.append(text('strong','這些發行者的端點不回應本站：'),text('span',' '+census.silentIssuers.join('、')+'。它們的卡種與撤銷清單因此不在下表中——政府端普遍擋資料中心來源，這是觀測限制，不代表那些卡不存在。'));
+    $('census-meta').parentNode.insertBefore(p,$('census-meta'));
+  }
   $('census-meta').textContent='「疑似測試卡」是依發行者自己給的名稱判斷（含 test／測試／記者會，或顯示名稱就等於機器代號，例如數位發展部的 sheep、dolly、fries）——正式環境上確實掛著不少內部測試卡，把它們一起讀成民眾持有的證件會高估這個生態系。判斷僅供參考，不影響任何數字。普查時間 '+when(census.at)+(census.unreadable?'；有 '+census.unreadable+' 個卡種沒有可讀的撤銷清單（發行者未提供或路徑不同），未計入。':'。')+' 卡種連結即為該清單的實際網址。';
 }
 
@@ -484,7 +489,7 @@ function renderChain(chain){
   [['鏈上一致',chain.verified],['與鏈上不符',chain.mismatch],['未上鏈',chain.notAnchored],['無法查詢',chain.unavailable]]
     .forEach(([label,value])=>{const d=document.createElement('div');d.append(text('strong',String(value)),text('small',label));grid.append(d)});
   host.append(grid);
-  host.append(text('p','Arbitrum RPC '+(chain.rpcOk?'正常':'無法連線')+(chain.blockNumber?'，最新區塊 '+parseInt(chain.blockNumber,16).toLocaleString():'')+'，掃描時間 '+when(chain.at),'panel-note'));
+  host.append(text('p','Arbitrum RPC '+(chain.rpcOk?'正常':'無法連線')+(chain.rpcEndpoint?'（'+chain.rpcEndpoint+'）':'')+(chain.rpcError?'：'+chain.rpcError:'')+(chain.blockNumber?'，最新區塊 '+parseInt(chain.blockNumber,16).toLocaleString():'')+'，掃描時間 '+when(chain.at),'panel-note'));
   if(chain.unavailable){host.append(text('p','有 '+chain.unavailable+' 筆這次查不到。免費公用 Arbitrum 節點會限制 Cloudflare 共用出口位址的流量，所以每天能核對到的筆數會浮動；部署者設定 ARBITRUM_RPC_URL（帶金鑰的節點）即可穩定完成。查不到就標示查不到，不會當成通過。','panel-note'))}
   if(chain.problems&&chain.problems.length){
     host.append(text('h3','API 宣稱與鏈上事實不符'));

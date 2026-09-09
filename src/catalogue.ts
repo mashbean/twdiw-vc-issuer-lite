@@ -59,6 +59,10 @@ export interface Census {
   /** Registers found but unreadable, kept as a count so the census never
    *  quietly under-reports. */
   unreadable: number;
+  /** Issuers whose endpoints would not answer this vantage point at all. Named
+   *  rather than counted: a census silently missing 公路局 reads as though the
+   *  driving licence does not exist. */
+  silentIssuers: string[];
 }
 
 async function gunzip(bytes: Uint8Array): Promise<Uint8Array> {
@@ -269,8 +273,13 @@ export async function takeCensus(
   }
   census.sort((left, right) => right.revoked - left.revoked || left.issuer.localeCompare(right.issuer));
 
+  const silentIssuers = discovered
+    .filter((item) => item.types === null || item.seeded)
+    .map((item) => item.issuer.name);
+
   return {
     at: Date.now(),
+    silentIssuers,
     issuersAsked: issuers.length,
     issuersAnswered: discovered.filter((item) => item.types !== null && !item.seeded).length,
     typesFound: targets.length,
@@ -291,6 +300,7 @@ export function censusPayload(census: Census): Record<string, JsonValue> {
     issuersAnswered: census.issuersAnswered,
     typesFound: census.typesFound,
     unreadable: census.unreadable,
+    silentIssuers: census.silentIssuers,
     totalRevoked: totalRevoked(census),
     entries: census.entries.map((entry) => ({ ...entry })),
   };

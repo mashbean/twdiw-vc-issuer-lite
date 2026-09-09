@@ -74,6 +74,8 @@ export interface DashboardPayload {
     unavailable: number;
     blockNumber?: string;
     rpcOk: boolean;
+    rpcError?: string;
+    rpcEndpoint?: string;
     problems: Array<{ did: string; name?: string; verdict: ChainVerdict; reason?: string }>;
   };
   census?: {
@@ -82,6 +84,7 @@ export interface DashboardPayload {
     issuersAnswered: number;
     typesFound: number;
     unreadable: number;
+    silentIssuers?: string[];
     totalRevoked: number;
     entries: Array<{
       issuer: string; issuerId: string; credentialType: string;
@@ -253,7 +256,10 @@ export class MonitorState extends DurableObject<Env> {
           target: "status-census", category: "status-list", label: "撤銷清單普查",
           ok: census.entries.length > 0,
           detail: `${census.issuersAnswered}/${census.issuersAsked} 個發行者、${census.entries.length} 份清單、共 ${totalRevoked(census)} 張已撤銷`,
-          data: { tier: "official", lists: census.entries.length, revoked: totalRevoked(census) },
+          data: {
+            tier: "official", lists: census.entries.length, revoked: totalRevoked(census),
+            silent: census.silentIssuers.join("、"),
+          },
         });
       } catch {
         results.push({
@@ -462,6 +468,10 @@ export class MonitorState extends DurableObject<Env> {
     this.putSnapshot("chain", at, {
       verdicts, counts, problems,
       blockNumber: scan.blockNumber, rpcOk: scan.rpcOk,
+      rpcError: scan.rpcError,
+      // Host only. The configured endpoint may carry an API key in its path and
+      // that must never reach a page or a stored snapshot.
+      rpcEndpoint: scan.rpcEndpoint ? safeHost(scan.rpcEndpoint) : undefined,
     });
   }
 
@@ -535,7 +545,7 @@ export class MonitorState extends DurableObject<Env> {
     const chain = this.snapshot<{
       counts: Record<ChainVerdict, number>;
       problems: Array<{ did: string; name?: string; verdict: ChainVerdict; reason?: string }>;
-      blockNumber?: string; rpcOk: boolean;
+      blockNumber?: string; rpcOk: boolean; rpcError?: string; rpcEndpoint?: string;
     }>("chain");
     const chainAt = Number(sql.exec("SELECT at FROM snapshots WHERE target = 'chain'").toArray()[0]?.at ?? 0);
 
@@ -557,6 +567,8 @@ export class MonitorState extends DurableObject<Env> {
         unavailable: chain.counts.unavailable ?? 0,
         blockNumber: chain.blockNumber,
         rpcOk: chain.rpcOk,
+        rpcError: chain.rpcError,
+        rpcEndpoint: chain.rpcEndpoint,
         problems: chain.problems ?? [],
       } : undefined,
       events,
@@ -572,6 +584,15 @@ export class MonitorState extends DurableObject<Env> {
       at: Number(row.at), kind: String(row.kind), target: String(row.target),
       summary: String(row.summary), detail: row.detail === null ? undefined : String(row.detail),
     }));
+  }
+}
+
+/** The hostname alone, so a keyed RPC URL never leaks its key. */
+function safeHost(value: string): string {
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return "（無法解析的端點）";
   }
 }
 
