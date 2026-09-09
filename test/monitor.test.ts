@@ -62,7 +62,9 @@ describe("what the monitor watches", () => {
     expect(lists).toHaveLength(1);
     expect(lists[0]?.url).toBe(`${ORIGIN}/status/1`);
     expect(lists[0]?.tier).toBe("own");
-    expect(WATCHED_REPOS.filter((repo) => repo.owner === "moda-gov-tw").length).toBeGreaterThanOrEqual(3);
+    expect(WATCHED_REPOS.filter((repo) => repo.owner === "moda-gov-tw").length).toBeGreaterThanOrEqual(2);
+    // A private repository can only ever 404 for a public monitor.
+    expect(WATCHED_REPOS.some((repo) => repo.repo === "TW-DIW")).toBe(false);
     expect(WATCHED_REPOS.map((repo) => repo.repo)).toContain("TWDIW-official-app");
   });
 });

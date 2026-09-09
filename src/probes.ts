@@ -160,10 +160,11 @@ export function statusListTargets(selfOrigin: string): Array<{ id: string; label
 }
 
 export const WATCHED_REPOS: Array<{ id: string; owner: string; repo: string; label: string; tier: Tier }> = [
-  // The official ones first: the wallet app people install, the ecosystem
-  // repository, and the DID work the trust list rests on.
+  // The official ones first: the wallet app people install, and the DID work
+  // the trust list rests on. `moda-gov-tw/TW-DIW` is deliberately absent — it
+  // is a private repository, so a public monitor can only ever report 404 on
+  // it, and watching what it cannot see would be theatre.
   { id: "repo-official-app", owner: "moda-gov-tw", repo: "TWDIW-official-app", label: "官方皮夾 App", tier: "official" },
-  { id: "repo-twdiw", owner: "moda-gov-tw", repo: "TW-DIW", label: "官方 TW-DIW", tier: "official" },
   { id: "repo-tw-did", owner: "moda-gov-tw", repo: "tw-did", label: "官方 tw-did", tier: "official" },
   { id: "repo-verifier", owner: "mashbean", repo: "twdiw-vp-verifier-lite", label: "請出示皮夾", tier: "own" },
   { id: "repo-issuer", owner: "mashbean", repo: "twdiw-vc-issuer-lite", label: "請收下卡片", tier: "own" },
