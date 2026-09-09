@@ -31,6 +31,15 @@ export interface CensusEntry {
   issuer: string;
   issuerId: string;
   credentialType: string;
+  /** The issuer's own display name for the type. Without it the table is a wall
+   *  of machine ids and a reader cannot tell a driving licence from a scratch
+   *  card called `sheep`. */
+  displayName?: string;
+  /** A heuristic, and labelled as one on the page: the production registry
+   *  carries a great many internal test and press-demo cards beside the real
+   *  ones, and reading them as citizen-facing credentials overstates the
+   *  ecosystem. Judged from the issuer's own naming, never from the counts. */
+  looksLikeTest: boolean;
   url: string;
   totalBits: number;
   revoked: number;
@@ -93,11 +102,28 @@ async function inBatches<T, R>(items: T[], size: number, task: (item: T) => Prom
   return out;
 }
 
-/** The credential types an issuer says it issues. */
+export interface DeclaredType {
+  id: string;
+  displayName?: string;
+}
+
+/** Names that say, in the issuer's own words, that a card is not for the
+ *  public: explicit test markers, and the press-launch demo cards moda kept. */
+const TEST_MARKERS = /test|demo|sample|測試|範例|記者會/i;
+
+export function looksLikeTestCard(id: string, displayName?: string): boolean {
+  const suffix = id.includes("_") ? id.slice(id.indexOf("_") + 1) : id;
+  if (TEST_MARKERS.test(id) || (displayName && TEST_MARKERS.test(displayName))) return true;
+  // A "display name" that is just the machine id repeated is a placeholder
+  // nobody meant a holder to read — `sheep`, `dolly`, `fries`.
+  return Boolean(displayName && displayName === suffix);
+}
+
+/** The credential types an issuer says it issues, with the names it gives them. */
 async function credentialTypes(
   entry: { serviceBaseURL: string; orgId: string },
   fetcher: typeof fetch,
-): Promise<string[] | null> {
+): Promise<DeclaredType[] | null> {
   try {
     const response = await fetcher(metadataURL(entry.serviceBaseURL, entry.orgId), {
       headers: { accept: "application/json" },
@@ -105,11 +131,15 @@ async function credentialTypes(
     });
     if (!response.ok) return null;
     const body = await response.json() as {
-      credential_configurations_supported?: Record<string, unknown>;
-      credentials_supported?: Record<string, unknown>;
+      credential_configurations_supported?: Record<string, { display?: Array<{ name?: unknown }> }>;
+      credentials_supported?: Record<string, { display?: Array<{ name?: unknown }> }>;
     };
     const configs = body.credential_configurations_supported ?? body.credentials_supported;
-    return configs ? Object.keys(configs) : null;
+    if (!configs) return null;
+    return Object.entries(configs).map(([id, config]) => {
+      const name = config?.display?.[0]?.name;
+      return { id, displayName: typeof name === "string" ? name : undefined };
+    });
   } catch {
     return null;
   }
@@ -119,7 +149,7 @@ async function credentialTypes(
 async function readRegister(
   url: string,
   fetcher: typeof fetch,
-): Promise<Omit<CensusEntry, "issuer" | "issuerId" | "credentialType" | "url"> | null> {
+): Promise<Omit<CensusEntry, "issuer" | "issuerId" | "credentialType" | "url" | "displayName" | "looksLikeTest"> | null> {
   try {
     const response = await fetcher(url, {
       headers: { accept: "application/jwt, application/json, */*" },
@@ -190,11 +220,11 @@ export async function takeCensus(
     types: await credentialTypes(issuer, fetcher),
   }));
 
-  const targets: Array<{ issuer: typeof issuers[number]; credentialType: string; url: string }> = [];
+  const targets: Array<{ issuer: typeof issuers[number]; type: DeclaredType; url: string }> = [];
   for (const { issuer, types } of discovered) {
-    for (const credentialType of types ?? []) {
+    for (const type of types ?? []) {
       if (targets.length >= maxRegisters) break;
-      targets.push({ issuer, credentialType, url: statusListURL(issuer.serviceBaseURL, credentialType) });
+      targets.push({ issuer, type, url: statusListURL(issuer.serviceBaseURL, type.id) });
     }
   }
 
@@ -213,9 +243,11 @@ export async function takeCensus(
     census.push({
       issuer: target.issuer.name,
       issuerId: target.issuer.orgId,
-      credentialType: target.credentialType,
+      credentialType: target.type.id,
+      displayName: target.type.displayName,
       url: target.url,
       ...register,
+      looksLikeTest: looksLikeTestCard(target.type.id, target.type.displayName),
     });
   }
   census.sort((left, right) => right.revoked - left.revoked || left.issuer.localeCompare(right.issuer));

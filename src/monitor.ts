@@ -84,7 +84,8 @@ export interface DashboardPayload {
     unreadable: number;
     totalRevoked: number;
     entries: Array<{
-      issuer: string; issuerId: string; credentialType: string; url: string;
+      issuer: string; issuerId: string; credentialType: string;
+      displayName?: string; looksLikeTest?: boolean; url: string;
       totalBits: number; revoked: number; kid?: string;
       keyInIssuerDid: boolean; subjectMatchesUrl: boolean;
     }>;

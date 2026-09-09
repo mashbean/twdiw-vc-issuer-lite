@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from "vitest";
 import { atomFeed, jsonFeed } from "../src/feed";
 import { MONITOR_CSS, MONITOR_HTML, MONITOR_JS } from "../src/monitor-frontend";
 import { describeRoles, describeVerdict } from "../src/monitor-wording";
+import { looksLikeTestCard } from "../src/catalogue";
 import {
   WATCHED_REPOS,
   endpointTargets,
@@ -180,6 +181,22 @@ describe("wording shared by the dashboard", () => {
     expect(describeVerdict("verified")).toBe("鏈上一致");
     expect(describeVerdict("mismatch")).toBe("與鏈上不符");
     expect(describeVerdict("notAnchored")).toBe("未上鏈");
+  });
+});
+
+describe("telling a real card from a scratch one", () => {
+  it("flags the production registry's internal test cards by the issuer's own naming", () => {
+    // moda keeps these beside the real ones on production infrastructure.
+    expect(looksLikeTestCard("2-16-886-101-20003-20082_sheep", "sheep")).toBe(true);
+    expect(looksLikeTestCard("2-16-886-101-20003-20082_test0417", "test0417")).toBe(true);
+    expect(looksLikeTestCard("2-16-886-101-20003-20082_driver_license_1212", "記者會駕照驗證卡")).toBe(true);
+    expect(looksLikeTestCard("2-16-886-101-20003-20082_test_degree_certificate_070701", "測試大學學位證書")).toBe(true);
+  });
+
+  it("leaves the citizen-facing cards alone", () => {
+    expect(looksLikeTestCard("2-16-886-101-20003-20008-20082_driverlicense_car_1211", "汽車駕照")).toBe(false);
+    expect(looksLikeTestCard("97176270_twmdiwvc_postpaid", "台灣大哥大門號電子卡")).toBe(false);
+    expect(looksLikeTestCard("2-16-886-101-20003-20082_visitor_card", "數位發展部訪客卡")).toBe(false);
   });
 });
 

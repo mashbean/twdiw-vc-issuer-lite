@@ -219,6 +219,10 @@ export const MONITOR_CSS = /* css */ `
 .own-block .panel{background:var(--card);border-color:#dfe4df}
 .own-block .status-strip{margin-bottom:24px}
 .own-strip{grid-template-columns:repeat(3,1fr)}
+/* A production register for an internal test card is still a production
+   register; it is just not a citizen's credential, so it recedes. */
+.monitor-table tr.test-card{background:#f7f8f7}
+.monitor-table tr.test-card td{color:var(--muted)}
 .panel{margin:0 0 16px;padding:clamp(20px,4vw,32px);background:var(--card);border:1px solid var(--line);border-radius:22px}
 .panel>summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;font-size:1.25rem;font-weight:800}
 .panel>summary::-webkit-details-marker{display:none}
@@ -274,6 +278,7 @@ export const MONITOR_CSS = /* css */ `
   .pill.mute{background:#1b2b23}
   .monitor-table tr.own,.trust-table tr.own{background:#161d19}
   .own-tag{background:#243029}
+  .monitor-table tr.test-card{background:#12171a}
   .own-block{background:#101713;border-color:#243029}
   .own-block .panel{border-color:#243029}
 }
@@ -453,18 +458,23 @@ function renderCensus(census){
   const summary=$('census-summary');clear(summary);
   const body=$('table-census').tBodies[0];clear(body);
   if(!census){const tr=document.createElement('tr');const td=text('td','尚未普查','loading');td.colSpan=5;tr.append(td);body.append(tr);return}
-  [['已撤銷卡片總數',census.totalRevoked],['撤銷清單份數',census.entries.length],['卡種總數',census.typesFound],['回應的發行者',census.issuersAnswered+' / '+census.issuersAsked]]
+  const tests=census.entries.filter(e=>e.looksLikeTest).length;
+  [['已撤銷卡片總數',census.totalRevoked.toLocaleString()],['撤銷清單份數',census.entries.length],['其中疑似測試卡',tests],['回應的發行者',census.issuersAnswered+' / '+census.issuersAsked]]
     .forEach(([label,value])=>{const d=document.createElement('div');d.append(text('strong',String(value)),text('small',label));summary.append(d)});
   census.entries.forEach(e=>{
-    const tr=document.createElement('tr');
+    const tr=document.createElement('tr');if(e.looksLikeTest)tr.className='test-card';
     const issuer=document.createElement('td');issuer.append(text('strong',e.issuer));issuer.append(text('small',e.issuerId));
-    const type=document.createElement('td');const a=document.createElement('a');a.href=e.url;a.textContent=e.credentialType;a.rel='noreferrer';type.append(a);
+    const type=document.createElement('td');
+    const a=document.createElement('a');a.href=e.url;a.rel='noreferrer';
+    a.textContent=e.displayName||e.credentialType;type.append(a);
+    if(e.looksLikeTest)type.append(text('span','疑似測試卡','own-tag'));
+    type.append(text('small',e.credentialType));
     const revoked=text('td',e.revoked.toLocaleString());if(e.revoked>0)revoked.style.fontWeight='800';
     const key=document.createElement('td');
     if(e.keyInIssuerDid)key.append(pill('是','ok'));else{key.append(pill('否','warn'));if(e.kid)key.append(text('small',e.kid))}
     tr.append(issuer,type,revoked,text('td',e.totalBits.toLocaleString()),key);body.append(tr);
   });
-  $('census-meta').textContent='普查時間 '+when(census.at)+(census.unreadable?'；有 '+census.unreadable+' 個卡種沒有可讀的撤銷清單（發行者未提供或路徑不同），未計入。':'。')+' 卡種連結即為該清單的實際網址。';
+  $('census-meta').textContent='「疑似測試卡」是依發行者自己給的名稱判斷（含 test／測試／記者會，或顯示名稱就等於機器代號，例如數位發展部的 sheep、dolly、fries）——正式環境上確實掛著不少內部測試卡，把它們一起讀成民眾持有的證件會高估這個生態系。判斷僅供參考，不影響任何數字。普查時間 '+when(census.at)+(census.unreadable?'；有 '+census.unreadable+' 個卡種沒有可讀的撤銷清單（發行者未提供或路徑不同），未計入。':'。')+' 卡種連結即為該清單的實際網址。';
 }
 
 function renderChain(chain){
