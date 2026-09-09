@@ -246,6 +246,22 @@ describe("scanning the whole registry", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it("sends every batch to the configured endpoint instead of spreading away from it", async () => {
+    const hosts: string[] = [];
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      hosts.push(new URL(String(input)).hostname);
+      const body = JSON.parse(String(init?.body));
+      if (!Array.isArray(body)) return new Response(JSON.stringify({ jsonrpc: "2.0", id: 0, result: "0x1" }), { status: 200 });
+      return new Response(JSON.stringify(body.map((call: { id: number }) => ({ id: call.id, result: null }))), { status: 200 });
+    }) as unknown as typeof fetch;
+    const many = Array.from({ length: 20 }, (_, index) => ({ ...REGISTRATION, did: `did:key:z${index}` }));
+    await scanChain(many, {
+      fetcher, retryScale: 0, preferFirst: true,
+      rpcURLs: ["https://keyed.example/v3/key", "https://public-a.example", "https://public-b.example"],
+    });
+    expect(new Set(hosts)).toEqual(new Set(["keyed.example"]));
+  });
+
   it("never echoes a configured endpoint, which may carry an API key", async () => {
     const secret = "https://arbitrum-mainnet.infura.io/v3/SUPERSECRETKEY";
     const fetcher = vi.fn(async () => { throw new Error(`request to ${secret} failed`); }) as unknown as typeof fetch;

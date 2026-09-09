@@ -277,6 +277,7 @@ export class MonitorState extends DurableObject<Env> {
         const keyed = (this.env as { ARBITRUM_RPC_URL?: string }).ARBITRUM_RPC_URL?.trim();
         const scan = await scanChain(registrations, {
           rpcURLs: keyed ? [keyed, ...ARBITRUM_RPCS] : undefined,
+          preferFirst: Boolean(keyed),
         });
         this.recordChain(at, scan, list.entries);
         results.push({

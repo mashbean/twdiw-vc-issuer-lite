@@ -384,11 +384,16 @@ function describeFailure(endpoint: string, host: string, error: unknown): string
 
 export async function scanChain(
   registrations: Registration[],
-  options: { rpcURLs?: string[]; fetcher?: typeof fetch; retryScale?: number } = {},
+  options: { rpcURLs?: string[]; fetcher?: typeof fetch; retryScale?: number; preferFirst?: boolean } = {},
 ): Promise<ChainScan> {
   const endpoints = options.rpcURLs ?? ARBITRUM_RPCS;
   const fetcher = options.fetcher ?? fetch;
   const retryScale = options.retryScale ?? 1;
+  // Round-robin exists to spread load across free endpoints that throttle. A
+  // configured endpoint is the opposite case: it is the only one that answers
+  // every query reliably, so spreading away from it is what leaves archive
+  // lookups unanswered. When one is set, every batch starts there.
+  const preferFirst = options.preferFirst ?? false;
   const byDid = new Map<string, RegistrationCheck>();
   const record = (check: RegistrationCheck) => {
     const existing = byDid.get(check.did);
@@ -439,7 +444,7 @@ export async function scanChain(
       if (offset > 0) await sleep(BATCH_PAUSE_MS * retryScale);
       // Start each batch at a different provider, so no single limiter sees the
       // whole registry. The full list still follows as fallback.
-      const rotation = offset / DIDS_PER_BATCH % endpoints.length;
+      const rotation = preferFirst ? 0 : offset / DIDS_PER_BATCH % endpoints.length;
       const ordered = [...endpoints.slice(rotation), ...endpoints.slice(0, rotation)];
       const answer = await callRPC(ordered, calls, fetcher, retryScale, rpcTrail);
       rpcEndpoint = answer.endpoint;
