@@ -61,6 +61,25 @@ QR   openid-credential-offer://?credential_offer_uri=https://issuer.example/api/
 
 發出去的卡是 TWDIW 現行方言：SD-JWT 包在 W3C `vc` 內，`iss` 與持有人都是 `did:key`（`jwk_jcs-pub`），`cnf.jwk` 綁定皮夾在 proof 中出示的金鑰，`vc.type[1]` 是卡種，每個欄位一個 disclosure，並附 StatusList2021 狀態清單（`GET /status/1`）。完整協定、信任模型與資料保存見 [docs/protocol-and-trust.md](docs/protocol-and-trust.md)。
 
+## 生態系監測儀表板
+
+`/monitor` 每天掃描一次台灣數位憑證皮夾生態系，並記錄**變化**：
+
+| 面向 | 看什麼 |
+|---|---|
+| API 健康度 | 官方信任清單 API、申請目錄、查驗端、本站與 vct 中繼資料的可達性、延遲，以及回應形狀是否仍符合皮夾所依賴的欄位 |
+| 發卡端到端自檢 | Worker 自己扮演皮夾走完 offer → token → proof → 領卡 → 驗證，證明發卡真的還能成功 |
+| 信任清單 | 登記 DID 總數與角色分布，以及誰加入、離開、更名、換端點 |
+| 撤銷清單 | 已知網址的清單位元圖、已撤銷張數，以及簽章金鑰是否就在發行者的 `did:key` 內 |
+| 區塊鏈 | 不相信 API 的上鏈宣稱：抓它指名的 Arbitrum 交易比對內容，再查合約的**現況**紀錄，避免舊登錄被回放 |
+| 原始碼 | 五個相關 repo 的最後更新、開放 issue 與授權（活躍度，不是健康度） |
+
+變更會寫進時間軸，並以 [JSON Feed](https://issuer.mashbean.net/monitor/feed.json) 與 [Atom](https://issuer.mashbean.net/monitor/feed.xml) 發布，只推變化、不推「今天一切正常」。
+
+儀表板明確標示它做不到的事：單點觀測、撤銷涵蓋範圍有限、看不到 TLS 憑證、資料最舊可能 24 小時。
+
+兩個可選 secret：`GITHUB_TOKEN` 讓 repo 面板不受 GitHub 匿名配額影響（Cloudflare 共用 IP 常已用完），`ARBITRUM_RPC_URL` 指向帶金鑰的節點讓鏈上比對每天都能完整跑完（免費公用節點會限制 Cloudflare 出口流量）。兩者都不設也能運作，只是那兩格會標示查不到。
+
 ## API
 
 建立一次領卡（頁面在做的事）：
@@ -78,6 +97,8 @@ curl -X POST https://your-worker.example/api/offers \
 - `offerUri`：皮夾取得 offer object 的位置
 - `eventsUrl`：同源一次性 WebSocket；瀏覽器連線後以第一個 message 提交 `resultKey`，之後會收到 `progress`（皮夾讀了 offer、拿到 token）與 `issued`（卡片內容、jti、耗時）
 - `resultKey`：訂閱結果需要的 256-bit capability；不放進 URL、QR 或 offer
+
+監測相關端點：`GET /api/monitor`（儀表板資料）、`POST /api/monitor/refresh`（一小時內至多一次，背景執行）、`GET /monitor/feed.json`、`GET /monitor/feed.xml`。
 
 其他端點：`GET /api/catalog`（卡種與虛構持卡人）、`GET /api/issuer`（did:key、公鑰、狀態清單位置）、`GET /api/trust-list`（官方清單加本站自評）、`POST /api/presentations`／`GET /api/request/:id`／`POST /api/response/:id`（出示測試，與請出示皮夾同形）、`GET /.well-known/openid-credential-issuer`、`GET /.well-known/oauth-authorization-server`、`GET /.well-known/jwt-vc-issuer`、`GET /status/1`。
 

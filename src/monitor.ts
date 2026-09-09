@@ -15,7 +15,7 @@
 // readable trend.
 
 import { DurableObject } from "cloudflare:workers";
-import { scanChain, type ChainVerdict, type Registration } from "./chain";
+import { ARBITRUM_RPCS, scanChain, type ChainVerdict, type Registration } from "./chain";
 import {
   WATCHED_REPOS,
   endpointTargets,
@@ -228,7 +228,13 @@ export class MonitorState extends DurableObject<Env> {
       this.diffTrustList(at, list.entries, list.error);
       const registrations: Registration[] = list.entries.flatMap((entry) => entry.registrations);
       if (registrations.length) {
-        const scan = await scanChain(registrations);
+        // A keyed endpoint, when the operator has set one, goes first: the free
+        // public RPCs throttle Cloudflare's shared egress addresses, which is
+        // the difference between a full comparison and a half-empty one.
+        const keyed = (this.env as { ARBITRUM_RPC_URL?: string }).ARBITRUM_RPC_URL?.trim();
+        const scan = await scanChain(registrations, {
+          rpcURLs: keyed ? [keyed, ...ARBITRUM_RPCS] : undefined,
+        });
         this.recordChain(at, scan, list.entries);
         results.push({
           target: "arbitrum-rpc", category: "chain", label: "Arbitrum RPC",

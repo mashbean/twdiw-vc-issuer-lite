@@ -319,6 +319,7 @@ function renderChain(chain){
     .forEach(([label,value])=>{const d=document.createElement('div');d.append(text('strong',String(value)),text('small',label));grid.append(d)});
   host.append(grid);
   host.append(text('p','Arbitrum RPC '+(chain.rpcOk?'正常':'無法連線')+(chain.blockNumber?'，最新區塊 '+parseInt(chain.blockNumber,16).toLocaleString():'')+'，掃描時間 '+when(chain.at),'panel-note'));
+  if(chain.unavailable){host.append(text('p','有 '+chain.unavailable+' 筆這次查不到。免費公用 Arbitrum 節點會限制 Cloudflare 共用出口位址的流量，所以每天能核對到的筆數會浮動；部署者設定 ARBITRUM_RPC_URL（帶金鑰的節點）即可穩定完成。查不到就標示查不到，不會當成通過。','panel-note'))}
   if(chain.problems&&chain.problems.length){
     host.append(text('h3','API 宣稱與鏈上事實不符'));
     const ul=document.createElement('ul');ul.className='problem-list';
